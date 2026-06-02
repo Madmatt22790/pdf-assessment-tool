@@ -362,7 +362,9 @@
     var MAX = 4;
     var sel = document.getElementById('sheetSelect');
     google.script.run
-      .withSuccessHandler(function(sheets) {
+      .withSuccessHandler(function(result) {
+        var sheets     = result.names;
+        var activeName = result.active;
         if (!sheets || sheets.length === 0) {
           sel.innerHTML = '<option value="">No sheets found</option>';
           showStatus('s0status', 'error', 'No sheet tabs found. Make sure this script is bound to your spreadsheet.');
@@ -375,7 +377,7 @@
           for (var i = 0; i < sheets.length; i++) {
             var o = document.createElement('option');
             o.value = sheets[i]; o.textContent = sheets[i];
-            if (i === 0) o.selected = true;
+            if (activeName ? sheets[i] === activeName : i === 0) o.selected = true;
             el.appendChild(o);
           }
         });
@@ -391,7 +393,7 @@
           showStatus('s0status', 'error', 'Failed: ' + (err && err.message ? err.message : 'unknown'));
         }
       })
-      .getSheetNames();
+      .getSheetNamesWithActive();
   }
 
   // ── Step 1: Config ───────────────────────────────────────
@@ -689,15 +691,8 @@
               return buildCombinedPdf(blankPdf, maxScoreVal);
             })
             .then(function(combinedBytes) {
-              setProgress(90, 'Saving to Drive...');
-              var b64      = uint8ToBase64(combinedBytes);
               var fileName = 'Assessments_' + sheetConfig.sheetName + '_' + todayString() + '.pdf';
-              return new Promise(function(resolve, reject) {
-                google.script.run
-                  .withSuccessHandler(resolve)
-                  .withFailureHandler(function(e) { reject(new Error(e.message)); })
-                  .saveGeneratedAssessment(b64, assessmentFileId, fileName);
-              });
+              return saveAssessmentInChunks(combinedBytes, fileName);
             })
             .then(function(result) {
               setProgress(100, 'Done!');
@@ -711,6 +706,7 @@
               document.getElementById('resultArea').appendChild(link);
             })
             .catch(function(err) {
+              console.error('[Generator] Pipeline failed:', err.message, err);
               setProgress(0, '');
               document.getElementById('progressWrap').style.display = 'none';
               showStatus('s2status', 'error', 'Error: ' + err.message);
@@ -1028,6 +1024,66 @@
     s.src = src; s.onload = onSuccess;
     s.onerror = function() { onError('Failed to load ' + src); };
     document.head.appendChild(s);
+  }
+
+  /**
+   * Uploads the combined assessment PDF to Drive in 5 MB chunks via
+   * Drive's resumable upload API, relayed through Apps Script.
+   * Mirrors the chunked download pattern used by the PDF Splitter.
+   */
+  function saveAssessmentInChunks(bytes, fileName) {
+    var CHUNK     = 5 * 1024 * 1024;  // 5 MB per round trip
+    var totalSize = bytes.length;
+
+    console.log('[Save] Starting upload — file:', fileName,
+                '| size:', (totalSize / 1024 / 1024).toFixed(2) + ' MB',
+                '| chunks needed:', Math.ceil(totalSize / CHUNK));
+
+    return new Promise(function(resolve, reject) {
+      setProgress(90, 'Saving to Drive… 0%');
+
+      console.log('[Save] Calling startAssessmentUpload…');
+      google.script.run
+        .withSuccessHandler(function(uploadUrl) {
+          console.log('[Save] Upload session started. URL:', uploadUrl);
+          var offset = 0;
+
+          function nextChunk() {
+            var chunkEnd    = Math.min(offset + CHUNK, totalSize);
+            var chunkBytes  = bytes.slice(offset, chunkEnd);
+            var chunkOffset = offset;
+            var b64         = uint8ToBase64(chunkBytes);
+            console.log('[Save] Uploading chunk — offset:', chunkOffset,
+                        '| chunk size:', ((chunkEnd - chunkOffset) / 1024).toFixed(0) + ' KB',
+                        '| progress:', Math.round(chunkOffset / totalSize * 100) + '%');
+            setProgress(90 + Math.round((offset / totalSize) * 9), 'Saving to Drive… ' + Math.round(offset / totalSize * 100) + '%');
+
+            google.script.run
+              .withSuccessHandler(function(result) {
+                console.log('[Save] Chunk response:', result);
+                if (result.done) {
+                  console.log('[Save] Upload complete. URL:', result.url);
+                  resolve(result);
+                } else {
+                  offset = chunkEnd;
+                  nextChunk();
+                }
+              })
+              .withFailureHandler(function(e) {
+                console.error('[Save] uploadAssessmentChunk failed:', e.message, e);
+                reject(new Error(e.message));
+              })
+              .uploadAssessmentChunk(uploadUrl, b64, chunkOffset, totalSize, fileName);
+          }
+
+          nextChunk();
+        })
+        .withFailureHandler(function(e) {
+          console.error('[Save] startAssessmentUpload failed:', e.message, e);
+          reject(new Error(e.message));
+        })
+        .startAssessmentUpload(assessmentFileId, fileName, totalSize);
+    });
   }
 
   function uint8ToBase64(bytes) {
