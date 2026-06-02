@@ -375,6 +375,7 @@
       </div>
       <div class="results" id="results"></div>
       <div class="status" id="s2status"></div>
+      <div id="outcomeErrors" style="display:none;margin-top:10px;"></div>
 
     </div>
   </div>
@@ -459,8 +460,9 @@
   var unassignedPages = [];  // 1-based page numbers where no QR was found
 
   // Score entry — populated after split completes
-  var splitStudentDocs = [];  // [{name, id, pdfBytes}] kept for score cropping
-  var outcomeMap       = {};  // studentId → {sheetName, outcomes:[{text,yPct,page}]}
+  var splitStudentDocs      = [];  // [{name, id, pdfBytes}] kept for score cropping
+  var outcomeMap            = {};  // studentId → {sheetName, outcomes:[{text,yPct,page}]}
+  var pendingOutcomeResults = [];  // saved so unmatched outcomes can be retried
 
   // ── Init ─────────────────────────────────────────────────────────────────
   window.addEventListener('load', function() {
@@ -1291,6 +1293,106 @@
       });
   }
 
+  // ── Outcome write result + error UI ──────────────────────────────────────
+
+  function handleOutcomeWriteResult(res) {
+    var noMatch = (res.errors || []).filter(function(e) { return e.type === 'noMatch'; });
+    var other   = (res.errors || []).filter(function(e) { return e.type !== 'noMatch'; });
+
+    var msg = '✓ ' + res.written + ' outcome(s) written to sheet.';
+    if (other.length) msg += ' ' + other.length + ' config error(s): ' + other.map(function(e) { return e.message || e; }).join('; ');
+
+    if (noMatch.length) {
+      showStatus('s2status', 'warn', msg + ' ' + noMatch.length + ' outcome(s) not found in sheet — see below.');
+      buildOutcomeErrorUI(noMatch);
+    } else {
+      showStatus('s2status', 'success', msg);
+      document.getElementById('outcomeErrors').style.display = 'none';
+      if (sheetConfig.scoreCol && splitStudentDocs.length > 0) buildScoreStep();
+    }
+  }
+
+  function buildOutcomeErrorUI(noMatchErrors) {
+    // Deduplicate by outcomeText+sheetName — same outcome text failing for multiple students
+    // only needs to be added once
+    var seen = {};
+    var unique = [];
+    noMatchErrors.forEach(function(e) {
+      var key = e.sheetName + '||' + e.text;
+      if (!seen[key]) { seen[key] = true; unique.push(e); }
+    });
+
+    var container = document.getElementById('outcomeErrors');
+    container.style.display = 'block';
+    container.innerHTML =
+      '<div style="font-size:11px;font-weight:600;color:#856404;margin-bottom:6px;">' +
+      unique.length + ' outcome(s) not found in the outcomes sheet:</div>';
+
+    unique.forEach(function(err, i) {
+      var card = document.createElement('div');
+      card.className = 'unassigned-row';
+      card.id = 'oerr_' + i;
+      card.innerHTML =
+        '<div class="unassigned-row-header">' +
+          '<span class="unassigned-page-label">Not found in "' + esc(err.sheetName) + '"</span>' +
+          '<button class="btn btn-sm" style="background:#fce8e6;color:#c5221f;" ' +
+            'onclick="skipOutcomeError(' + i + ')">✕ Skip</button>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#202124;margin-bottom:6px;">' + esc(err.text) + '</div>' +
+        '<div style="font-size:11px;color:#5f6368;margin-bottom:4px;">' +
+          'Add this outcome to the sheet, then retry:</div>' +
+        '<input type="text" id="oerrText_' + i + '" value="' + esc(err.text) + '" ' +
+          'style="margin-bottom:6px;">' +
+        '<div style="display:flex;gap:6px;">' +
+          '<button class="btn btn-primary btn-sm" ' +
+            'onclick="addOutcomeAndRetry(' + i + ',\'' + esc(err.sheetName) + '\')">+ Add &amp; Retry</button>' +
+        '</div>' +
+        '<div id="oerrStatus_' + i + '" style="font-size:11px;margin-top:4px;"></div>';
+      container.appendChild(card);
+    });
+  }
+
+  function addOutcomeAndRetry(index, sheetName) {
+    var text     = document.getElementById('oerrText_' + index).value.trim();
+    var statusEl = document.getElementById('oerrStatus_' + index);
+    if (!text) { statusEl.textContent = 'Please enter outcome text.'; statusEl.style.color = '#c5221f'; return; }
+
+    statusEl.textContent = 'Adding to sheet…';
+    statusEl.style.color = '#5f6368';
+
+    google.script.run
+      .withSuccessHandler(function() {
+        statusEl.textContent = 'Added. Retrying all outcomes…';
+        // Retry writing all outcomes — newly added row will now match
+        google.script.run
+          .withSuccessHandler(function(res) {
+            document.getElementById('oerr_' + index).parentNode
+              .removeChild(document.getElementById('oerr_' + index));
+            handleOutcomeWriteResult(res);
+          })
+          .withFailureHandler(function(e) {
+            statusEl.textContent = 'Retry failed: ' + e.message;
+            statusEl.style.color = '#c5221f';
+          })
+          .writeOutcomesToSheet(pendingOutcomeResults);
+      })
+      .withFailureHandler(function(e) {
+        statusEl.textContent = 'Could not add: ' + e.message;
+        statusEl.style.color = '#c5221f';
+      })
+      .addOutcomeToSheet(sheetName, text);
+  }
+
+  function skipOutcomeError(index) {
+    var card = document.getElementById('oerr_' + index);
+    if (card) card.parentNode.removeChild(card);
+    var container = document.getElementById('outcomeErrors');
+    if (!container.querySelector('.unassigned-row')) {
+      container.style.display = 'none';
+      if (sheetConfig.scoreCol && splitStudentDocs.length > 0) buildScoreStep();
+    }
+  }
+
   // ── Outcome detection ─────────────────────────────────────────────────────
   // DARKNESS_THRESHOLD: 0-255 average darkness of pixels in the [O] region.
   // A filled-in circle will read darker than the printed empty [O].
@@ -1315,17 +1417,10 @@
     if (index >= splitStudentDocs.length) {
       // All students processed — send to server
       if (allResults.length > 0) {
+        pendingOutcomeResults = allResults;
         showStatus('s2status', 'info', 'Writing outcomes to sheet…');
         google.script.run
-          .withSuccessHandler(function(res) {
-            var msg = '✓ ' + res.written + ' outcome(s) written to sheet.';
-            if (res.errors && res.errors.length) {
-              msg += ' ' + res.errors.length + ' outcome(s) could not be matched — ' +
-                     'check that the text after [O] closely matches the outcomes sheet.';
-            }
-            showStatus('s2status', res.errors && res.errors.length ? 'warn' : 'success', msg);
-            if (sheetConfig.scoreCol && splitStudentDocs.length > 0) buildScoreStep();
-          })
+          .withSuccessHandler(function(res) { handleOutcomeWriteResult(res); })
           .withFailureHandler(function(e) {
             showStatus('s2status', 'warn', 'Outcomes detected but could not write to sheet: ' + e.message);
             if (sheetConfig.scoreCol && splitStudentDocs.length > 0) buildScoreStep();
@@ -1358,6 +1453,7 @@
         if (outcomeResults.length > 0) {
           allResults.push({
             studentName: entry.name,
+            studentId:   entry.id,
             sheetName:   oData.sheetName,
             outcomes:    outcomeResults,
           });
