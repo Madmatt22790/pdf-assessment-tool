@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Google Sans', Arial, sans-serif;
+      font-size: 13px;
+      color: #202124;
+      background: #f8f9fa;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      background: #188038;
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .header h2 { font-size: 15px; font-weight: 500; }
+    .steps { display: flex; flex-direction: column; overflow-y: auto; flex: 1; }
+    .step { background: white; border-bottom: 1px solid #e8eaed; padding: 14px 16px; }
+    .step-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .step-title {
+      font-weight: 600;
+      font-size: 12px;
+      color: #1a73e8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .step-title.confirmed { color: #188038; }
+    .step-chevron { font-size: 11px; color: #9aa0a6; transition: transform 0.2s; }
+    .step-chevron.open { transform: rotate(180deg); }
+    .step-body { margin-top: 10px; }
+    .step-body.collapsed { display: none; }
+    .confirmed-badge { font-size: 11px; color: #188038; margin-top: 3px; display: none; }
+    .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .config-grid .full { grid-column: 1 / -1; }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 7px 10px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus  { border-color: #1a73e8; }
+    input.valid  { border-color: #188038; background: #f0faf3; }
+    input.invalid{ border-color: #d93025; background: #fdf3f2; }
+    label { display: block; font-size: 11px; color: #5f6368; margin-bottom: 3px; font-weight: 500; }
+    .field-hint { font-size: 10px; color: #9aa0a6; margin-top: 2px; line-height: 1.4; }
+    select {
+      width: 100%;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 7px 10px;
+      font-size: 13px;
+      background: white;
+      outline: none;
+    }
+    select:focus { border-color: #1a73e8; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: #1a73e8; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #1557b0; }
+    .btn-success { background: #188038; color: white; }
+    .btn-success:hover:not(:disabled) { background: #0d6329; }
+    .btn-outline { background: white; color: #1a73e8; border: 1px solid #1a73e8; }
+    .btn-outline:hover:not(:disabled) { background: #e8f0fe; }
+    .btn-sm    { padding: 5px 10px; font-size: 12px; }
+    .btn-block { width: 100%; justify-content: center; margin-top: 8px; }
+    .file-row { display: flex; gap: 6px; align-items: flex-end; }
+    .file-row input { flex: 1; }
+    .info-box {
+      background: #e8f0fe;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #1a73e8;
+      margin-top: 8px;
+      display: none;
+      line-height: 1.5;
+    }
+    .run-summary {
+      background: #f8f9fa;
+      border: 1px solid #e8eaed;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 11px;
+      color: #5f6368;
+      line-height: 1.8;
+      margin-bottom: 8px;
+      display: none;
+    }
+    .progress-wrap { display: none; margin-top: 8px; }
+    .progress-bar-bg { background: #e8eaed; border-radius: 99px; height: 6px; margin-bottom: 6px; }
+    .progress-bar { background: #188038; height: 6px; border-radius: 99px; width: 0%; transition: width 0.3s; }
+    .status { font-size: 12px; padding: 6px 10px; border-radius: 4px; margin-top: 8px; display: none; }
+    .status.info    { background: #e8f0fe; color: #1a73e8; }
+    .status.success { background: #e6f4ea; color: #137333; }
+    .status.error   { background: #fce8e6; color: #c5221f; }
+    .result-link {
+      display: block;
+      margin-top: 10px;
+      background: #e6f4ea;
+      border: 1px solid #a8d5b5;
+      border-radius: 4px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #137333;
+      text-decoration: none;
+      text-align: center;
+      font-weight: 500;
+    }
+    .result-link:hover { background: #d2edda; }
+    hr { border: none; border-top: 1px solid #e8eaed; margin: 10px 0; }
+    .preview-chip {
+      display: inline-flex;
+      align-items: center;
+      background: #e8f0fe;
+      color: #1a73e8;
+      border-radius: 99px;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <span>&#128196;</span>
+  <h2>Assessment Generator</h2>
+</div>
+
+<div class="steps">
+
+  <!-- STEP 1: Sheet config -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s0body','s0chev')">
+      <div>
+        <div class="step-title" id="s0title">Step 1 - Sheet Configuration</div>
+        <div class="confirmed-badge" id="s0badge">Configuration saved</div>
+      </div>
+      <span class="step-chevron open" id="s0chev">&#9660;</span>
+    </div>
+    <div class="step-body" id="s0body">
+      <div style="margin-top:2px;">
+        <label>Sheet Tab</label>
+        <select id="sheetSelect" onchange="validateConfig()">
+          <option value="">Loading...</option>
+        </select>
+      </div>
+      <hr>
+      <div class="config-grid">
+        <div>
+          <label>Student Name Column</label>
+          <input type="text" id="nameCol" maxlength="3" placeholder="e.g. B"
+                 oninput="this.value=this.value.toUpperCase();validateConfig()">
+        </div>
+        <div>
+          <label>Student ID Column</label>
+          <input type="text" id="idCol" maxlength="3" placeholder="e.g. C"
+                 oninput="this.value=this.value.toUpperCase();validateConfig()">
+          <div class="field-hint">Column containing the unique student ID (used for QR code)</div>
+        </div>
+        <div class="full">
+          <label>First Data Row</label>
+          <input type="number" id="dataStartRow" min="1" value="2" oninput="validateConfig()">
+        </div>
+      </div>
+      <div id="configPreview" style="display:none;margin-top:10px;">
+        <div style="font-size:11px;color:#5f6368;margin-bottom:3px;">Reading from:</div>
+        <span class="preview-chip" id="configChip">-</span>
+      </div>
+      <div class="status" id="s0status"></div>
+      <button class="btn btn-primary btn-block" id="confirmConfigBtn" onclick="confirmConfig()" disabled>
+        Confirm and Load Students
+      </button>
+    </div>
+  </div>
+
+  <!-- STEP 2: Upload blank assessment -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s1body','s1chev')">
+      <div>
+        <div class="step-title" id="s1title">Step 2 - Upload Blank Assessment</div>
+        <div class="confirmed-badge" id="s1badge"></div>
+      </div>
+      <span class="step-chevron open" id="s1chev">&#9660;</span>
+    </div>
+    <div class="step-body" id="s1body">
+      <p style="font-size:12px;color:#5f6368;margin-bottom:8px;">
+        Upload the blank assessment PDF to Google Drive first, then paste the file ID or URL here.
+        Each student will receive their own copy with their name and QR code stamped at the top of every page.
+      </p>
+      <label>Google Drive File ID or URL</label>
+      <div class="file-row">
+        <input type="text" id="fileIdInput" placeholder="Paste file ID or Drive URL...">
+        <button class="btn btn-outline btn-sm" onclick="validateFile()">Load</button>
+      </div>
+      <div class="info-box" id="fileInfo"></div>
+      <div class="status" id="s1status"></div>
+    </div>
+  </div>
+
+  <!-- STEP 3: Outcomes (optional) -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s2oBody','s2oChev')">
+      <div>
+        <div class="step-title" id="s2oTitle">Step 3 - Outcomes (Optional)</div>
+        <div class="confirmed-badge" id="s2oBadge"></div>
+      </div>
+      <span class="step-chevron open" id="s2oChev">&#9660;</span>
+    </div>
+    <div class="step-body" id="s2oBody">
+      <p style="font-size:12px;color:#5f6368;margin-bottom:8px;line-height:1.5;">
+        If your assessment has outcome indicators, type <strong>○</strong> before each outcome
+        line in your Word/Google Doc before exporting to PDF. When the PDF is loaded above,
+        click <em>Scan for Outcomes</em> to detect them automatically.
+      </p>
+      <p style="font-size:12px;color:#5f6368;margin-bottom:8px;line-height:1.5;">
+        Example line in your doc:<br>
+        <span style="font-family:monospace;background:#f1f3f4;padding:2px 6px;border-radius:3px;">
+          ○ Counting forwards and backward by tens and hundreds
+        </span>
+      </p>
+
+      <!-- Outcomes sheet config -->
+      <div style="background:#f8f9fa;border:1px solid #e8eaed;border-radius:6px;
+                  padding:10px 12px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:600;color:#5f6368;margin-bottom:8px;">
+          Outcomes Spreadsheet
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 60px 60px;gap:8px;">
+          <div>
+            <label>Sheet Tab</label>
+            <select id="outcomesSheet">
+              <option value="">Loading…</option>
+            </select>
+          </div>
+          <div>
+            <label>Name Row</label>
+            <input type="number" id="outcomesNameRow" value="1" min="1"
+                   style="width:100%;padding:7px 6px;">
+          </div>
+          <div>
+            <label>Name Col</label>
+            <input type="text" id="outcomesNameCol" value="C" maxlength="3"
+                   style="width:100%;" oninput="this.value=this.value.toUpperCase()">
+          </div>
+        </div>
+        <div style="margin-top:8px;">
+          <label>Outcome Text Column</label>
+          <input type="text" id="outcomesTextCol" value="B" maxlength="3"
+                 style="width:80px;" oninput="this.value=this.value.toUpperCase()">
+        </div>
+      </div>
+
+      <button class="btn btn-outline btn-block" id="scanOutcomesBtn"
+              onclick="scanOutcomes()" disabled>
+        🔍 Scan PDF for [O] Outcomes
+      </button>
+
+      <div id="outcomesDetected" style="margin-top:10px;display:none;">
+        <div style="font-size:11px;font-weight:600;color:#5f6368;margin-bottom:6px;">
+          Detected outcomes — verify before generating:
+        </div>
+        <div id="outcomesList" style="display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+
+      <div class="status" id="s2oStatus"></div>
+
+      <button class="btn btn-primary btn-block" id="confirmOutcomesBtn"
+              onclick="confirmOutcomes()" style="display:none;">
+        ✓ Confirm Outcomes
+      </button>
+      <button class="btn btn-outline btn-block" id="skipOutcomesBtn"
+              onclick="skipOutcomes()" style="margin-top:4px;font-size:12px;">
+        Skip — no outcomes for this assessment
+      </button>
+    </div>
+  </div>
+
+  <!-- STEP 4: Generate -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s2body','s2chev')">
+      <div>
+        <div class="step-title" id="s2title">Step 4 - Generate</div>
+      </div>
+      <span class="step-chevron open" id="s2chev">&#9660;</span>
+    </div>
+    <div class="step-body" id="s2body">
+      <!-- Max score input -->
+      <div style="background:#f8f9fa;border:1px solid #e8eaed;border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+        <label>Max Score (optional)</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+          <input type="number" id="maxScore" min="1" max="999" placeholder="e.g. 30"
+                 style="width:90px;" oninput="updateRunSummary()">
+          <span style="font-size:12px;color:#5f6368;line-height:1.4;">
+            Pre-fills the "out of" value on the score box.<br>Leave blank to fill in by hand.
+          </span>
+        </div>
+      </div>
+      <div class="run-summary" id="runSummary"></div>
+      <button class="btn btn-success btn-block" id="runBtn" onclick="runGenerate()" disabled>
+        &#9654; Generate Assessment PDF
+      </button>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+        <div style="font-size:12px;color:#5f6368;margin-top:2px;" id="progressLabel">Working...</div>
+      </div>
+      <div id="resultArea"></div>
+      <div class="status" id="s2status"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  var students        = [];
+  var assessmentFileId = null;
+  var configConfirmed = false;
+  var fileConfirmed   = false;
+  var sheetConfig     = null;
+  var PDFDocument     = null;
+  var detectedOutcomes = [];   // [{text, yPct, page}] found in PDF text layer
+  var outcomesConfig   = null; // {sheetName, nameRow, nameCol, textCol} or null if skipped
+
+  window.addEventListener('load', function() {
+    setTimeout(function() { loadSheetNames(0); }, 500);
+  });
+
+  // ── Sheet loading ────────────────────────────────────────
+
+  function loadSheetNames(attempt) {
+    var MAX = 4;
+    var sel = document.getElementById('sheetSelect');
+    google.script.run
+      .withSuccessHandler(function(sheets) {
+        if (!sheets || sheets.length === 0) {
+          sel.innerHTML = '<option value="">No sheets found</option>';
+          showStatus('s0status', 'error', 'No sheet tabs found. Make sure this script is bound to your spreadsheet.');
+          return;
+        }
+        var selIds = ['sheetSelect', 'outcomesSheet'];
+        selIds.forEach(function(id) {
+          var el = document.getElementById(id);
+          el.innerHTML = '';
+          for (var i = 0; i < sheets.length; i++) {
+            var o = document.createElement('option');
+            o.value = sheets[i]; o.textContent = sheets[i];
+            if (i === 0) o.selected = true;
+            el.appendChild(o);
+          }
+        });
+        showStatus('s0status', 'info', 'Found ' + sheets.length + ' tab(s). Fill in the columns below.');
+        validateConfig();
+      })
+      .withFailureHandler(function(err) {
+        if (attempt < MAX) {
+          sel.innerHTML = '<option value="">Retrying (' + (attempt + 2) + '/' + (MAX + 1) + ')...</option>';
+          setTimeout(function() { loadSheetNames(attempt + 1); }, (attempt + 1) * 1000);
+        } else {
+          sel.innerHTML = '<option value="">Could not load</option>';
+          showStatus('s0status', 'error', 'Failed: ' + (err && err.message ? err.message : 'unknown'));
+        }
+      })
+      .getSheetNames();
+  }
+
+  // ── Step 1: Config ───────────────────────────────────────
+
+  function validateConfig() {
+    var nameCol  = document.getElementById('nameCol').value.trim();
+    var idCol    = document.getElementById('idCol').value.trim();
+    var startRow = document.getElementById('dataStartRow').value.trim();
+    var sheet    = document.getElementById('sheetSelect').value;
+    var colRx    = /^[A-Z]{1,3}$/;
+    var nameOk   = colRx.test(nameCol);
+    var idOk     = colRx.test(idCol);
+    var rowOk    = /^\d+$/.test(startRow) && parseInt(startRow, 10) >= 1;
+    var allOk    = nameOk && idOk && rowOk && !!sheet;
+    markInput('nameCol',      nameOk || !nameCol);
+    markInput('idCol',        idOk   || !idCol);
+    markInput('dataStartRow', rowOk  || !startRow);
+    document.getElementById('confirmConfigBtn').disabled = !allOk;
+    if (allOk) {
+      document.getElementById('configPreview').style.display = 'block';
+      document.getElementById('configChip').textContent = '"' + sheet + '" | Names: col ' + nameCol + ' | IDs: col ' + idCol + ' | from row ' + startRow;
+    } else {
+      document.getElementById('configPreview').style.display = 'none';
+    }
+  }
+
+  function markInput(id, ok) {
+    var el = document.getElementById(id);
+    el.classList.remove('valid', 'invalid');
+    if (el.value.trim()) { el.classList.add(ok ? 'valid' : 'invalid'); }
+  }
+
+  function confirmConfig() {
+    var nameCol      = document.getElementById('nameCol').value.trim().toUpperCase();
+    var idCol        = document.getElementById('idCol').value.trim().toUpperCase();
+    var dataStartRow = parseInt(document.getElementById('dataStartRow').value, 10);
+    var sheetName    = document.getElementById('sheetSelect').value;
+    if (nameCol === idCol) { return showStatus('s0status', 'error', 'Name column and ID column cannot be the same.'); }
+    sheetConfig = { sheetName: sheetName, nameCol: nameCol, idCol: idCol, dataStartRow: dataStartRow };
+    showStatus('s0status', 'info', 'Loading students...');
+    google.script.run
+      .withSuccessHandler(function(data) {
+        students = data;
+        configConfirmed = true;
+        document.getElementById('s0title').classList.add('confirmed');
+        document.getElementById('s0badge').style.display = 'block';
+        showStatus('s0status', 'success', 'Loaded ' + students.length + ' students.');
+        collapseStep('s0body', 's0chev');
+        updateRunSummary();
+        updateRunButton();
+      })
+      .withFailureHandler(function(err) {
+        showStatus('s0status', 'error', 'Could not load students: ' + err.message);
+      })
+      .getStudentsWithConfig(sheetConfig);
+  }
+
+  // ── Step 2: File ─────────────────────────────────────────
+
+  function validateFile() {
+    var raw = document.getElementById('fileIdInput').value.trim();
+    if (!raw) { return showStatus('s1status', 'error', 'Please enter a file ID or URL.'); }
+    var match = raw.match(/[-\w]{25,}/);
+    if (!match) { return showStatus('s1status', 'error', 'Could not parse a valid Drive file ID.'); }
+    showStatus('s1status', 'info', 'Validating...');
+    google.script.run
+      .withSuccessHandler(function(meta) {
+        assessmentFileId = meta.id;
+        fileConfirmed = true;
+        document.getElementById('s1title').classList.add('confirmed');
+        document.getElementById('s1badge').textContent = meta.name;
+        document.getElementById('s1badge').style.display = 'block';
+        document.getElementById('fileInfo').style.display = 'block';
+        document.getElementById('fileInfo').textContent = 'Loaded: ' + meta.name;
+        showStatus('s1status', 'success', 'File confirmed.');
+        collapseStep('s1body', 's1chev');
+        updateRunSummary();
+        updateRunButton();
+        // Enable outcomes scan now that file is loaded
+        document.getElementById('scanOutcomesBtn').disabled = false;
+      })
+      .withFailureHandler(function(err) { showStatus('s1status', 'error', err.message); })
+      .validateAssessmentFile(match[0]);
+  }
+
+  // ── Step 3: Outcomes ─────────────────────────────────────
+
+  var OUTCOME_SYMBOL = '[O]';  // prefix teachers type before each outcome line
+
+  function scanOutcomes() {
+    if (!assessmentFileId) return;
+    document.getElementById('scanOutcomesBtn').disabled = true;
+    showStatus('s2oStatus', 'info', 'Loading PDF…');
+    detectedOutcomes = [];
+
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', function() {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+      new Promise(function(resolve, reject) {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(function(e) { reject(new Error(e.message)); })
+          .getAssessmentPdfAsBase64(assessmentFileId);
+      })
+      .then(function(base64) {
+        var binary = atob(base64);
+        var bytes  = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return pdfjsLib.getDocument({ data: bytes }).promise;
+      })
+      .then(function(pdf) {
+        // Scan all pages for ○ symbols in the text layer
+        var chain = Promise.resolve();
+        var found = [];
+        for (var p = 1; p <= pdf.numPages; p++) {
+          (function(pageNum) {
+            chain = chain.then(function() {
+              return pdf.getPage(pageNum).then(function(pg) {
+                return pg.getViewport({ scale: 1.0 }).then
+                  ? pg.getViewport({ scale: 1.0 })
+                  : pg.getViewport({ scale: 1.0 });
+              }).then(function(vp) {
+                return pdf.getPage(pageNum).then(function(pg) {
+                  var viewport = pg.getViewport({ scale: 1.0 });
+                  return pg.getTextContent().then(function(content) {
+                    content.items.forEach(function(item) {
+                      var str = item.str;
+                      if (str.indexOf(OUTCOME_SYMBOL) !== -1) {
+                        // Extract text after the symbol
+                        var afterSymbol = str.substring(
+                          str.indexOf(OUTCOME_SYMBOL) + OUTCOME_SYMBOL.length
+                        ).trim();
+                        if (!afterSymbol) return; // symbol alone, text may be next item
+                        // Y position as fraction of page height (PDF coords from bottom)
+                        var yFromTop = 1.0 - (item.transform[5] / viewport.viewBox[3]);
+                        // X position as fraction of page width
+                        var xFrac = item.transform[4] / viewport.viewBox[2];
+                        found.push({
+                          text:  afterSymbol,
+                          yPct:  parseFloat(yFromTop.toFixed(4)),
+                          xPct:  parseFloat(xFrac.toFixed(4)),
+                          page:  pageNum
+                        });
+                      }
+                    });
+                    // Also check for ○ at end of one item with text in next
+                    // by scanning consecutive item pairs
+                    for (var i = 0; i < content.items.length - 1; i++) {
+                      var cur  = content.items[i].str.trim();
+                      var next = content.items[i + 1].str.trim();
+                      if (cur === OUTCOME_SYMBOL && next) {
+                        var yFromTop2 = 1.0 - (content.items[i].transform[5] / viewport.viewBox[3]);
+                        var xFrac2    = content.items[i].transform[4] / viewport.viewBox[2];
+                        found.push({
+                          text: next,
+                          yPct: parseFloat(yFromTop2.toFixed(4)),
+                          xPct: parseFloat(xFrac2.toFixed(4)),
+                          page: pageNum
+                        });
+                      }
+                    }
+                  });
+                });
+              });
+            });
+          })(p);
+        }
+        return chain.then(function() { return found; });
+      })
+      .then(function(found) {
+        // Deduplicate by text
+        var seen = {};
+        detectedOutcomes = found.filter(function(o) {
+          if (seen[o.text]) return false;
+          seen[o.text] = true;
+          return true;
+        });
+
+        document.getElementById('scanOutcomesBtn').disabled = false;
+
+        if (!detectedOutcomes.length) {
+          showStatus('s2oStatus', 'warn',
+            'No [O] markers found in the PDF. Make sure you\'ve typed [O] before each outcome line.');
+          return;
+        }
+
+        showStatus('s2oStatus', 'success',
+          'Found ' + detectedOutcomes.length + ' outcome(s). Review below.');
+
+        // Display for confirmation
+        var list = document.getElementById('outcomesList');
+        list.innerHTML = '';
+        detectedOutcomes.forEach(function(o, i) {
+          var div = document.createElement('div');
+          div.style.cssText = 'font-size:11px;background:#e8f0fe;border-radius:4px;' +
+                              'padding:5px 8px;color:#1a73e8;line-height:1.4;';
+          div.innerHTML = '<strong>[O] ' + (i + 1) + '</strong> — ' + esc(o.text) +
+                          ' <span style="color:#9aa0a6;">(p.' + o.page + ')</span>';
+          list.appendChild(div);
+        });
+        document.getElementById('outcomesDetected').style.display = 'block';
+        document.getElementById('confirmOutcomesBtn').style.display = 'block';
+      })
+      .catch(function(err) {
+        document.getElementById('scanOutcomesBtn').disabled = false;
+        showStatus('s2oStatus', 'error', 'Scan failed: ' + err.message);
+      });
+    }, function() {
+      showStatus('s2oStatus', 'error', 'Could not load pdf.js.');
+      document.getElementById('scanOutcomesBtn').disabled = false;
+    });
+  }
+
+  function confirmOutcomes() {
+    var sheet   = document.getElementById('outcomesSheet').value;
+    var nameRow = parseInt(document.getElementById('outcomesNameRow').value, 10) || 1;
+    var nameCol = document.getElementById('outcomesNameCol').value.trim().toUpperCase() || 'C';
+    var textCol = document.getElementById('outcomesTextCol').value.trim().toUpperCase() || 'B';
+    if (!sheet) return showStatus('s2oStatus', 'error', 'Select an outcomes sheet tab.');
+    outcomesConfig = { sheetName: sheet, nameRow: nameRow, nameCol: nameCol, textCol: textCol };
+    document.getElementById('s2oTitle').classList.add('confirmed');
+    document.getElementById('s2oBadge').textContent =
+      detectedOutcomes.length + ' outcomes → ' + sheet;
+    document.getElementById('s2oBadge').style.display = 'block';
+    collapseStep('s2oBody', 's2oChev');
+    showStatus('s2oStatus', 'success', '✓ ' + detectedOutcomes.length + ' outcomes confirmed.');
+    updateRunButton();
+  }
+
+  function skipOutcomes() {
+    detectedOutcomes = [];
+    outcomesConfig   = null;
+    document.getElementById('s2oTitle').classList.add('confirmed');
+    document.getElementById('s2oBadge').textContent = 'Skipped';
+    document.getElementById('s2oBadge').style.display = 'block';
+    collapseStep('s2oBody', 's2oChev');
+    updateRunButton();
+  }
+
+  // ── Step 4: Generate ─────────────────────────────────────
+
+  function updateRunSummary() {
+    var el = document.getElementById('runSummary');
+    if (!configConfirmed || !fileConfirmed) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.innerHTML =
+      '<strong>Students:</strong> ' + students.length + '<br>' +
+      '<strong>Sheet:</strong> ' + esc(sheetConfig.sheetName) + '<br>' +
+      '<strong>Assessment file loaded</strong> &#10003;<br>' +
+      '<strong>Output:</strong> One PDF with all students combined, saved to the same Drive folder';
+  }
+
+  function updateRunButton() {
+    document.getElementById('runBtn').disabled = !(configConfirmed && fileConfirmed && students.length > 0);
+  }
+
+  function runGenerate() {
+    document.getElementById('runBtn').disabled = true;
+    document.getElementById('progressWrap').style.display = 'block';
+    document.getElementById('resultArea').innerHTML = '';
+    showStatus('s2status', 'info', 'Loading libraries...');
+    setProgress(5, 'Loading PDF and QR libraries...');
+
+    // Load pdf-lib then qrcode.js sequentially
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js',
+      function() {
+        loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+          function() {
+            if (!window.PDFLib || !window.PDFLib.PDFDocument) {
+              showStatus('s2status', 'error', 'PDF library failed to load. Check your internet connection.');
+              document.getElementById('runBtn').disabled = false;
+              return;
+            }
+            PDFDocument = window.PDFLib.PDFDocument;
+            setProgress(10, 'Fetching blank assessment from Drive...');
+
+            new Promise(function(resolve, reject) {
+              google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(function(e) { reject(new Error(e.message)); })
+                .getAssessmentPdfAsBase64(assessmentFileId);
+            })
+            .then(function(base64Pdf) {
+              setProgress(15, 'Parsing blank assessment...');
+              var binary = atob(base64Pdf);
+              var bytes  = new Uint8Array(binary.length);
+              for (var i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+              return PDFDocument.load(bytes, { ignoreEncryption: true });
+            })
+            .then(function(blankPdf) {
+              setProgress(20, 'Generating assessments for ' + students.length + ' students...');
+              var maxScore = parseInt(document.getElementById('maxScore').value, 10);
+              var maxScoreVal = isNaN(maxScore) ? null : maxScore;
+              return buildCombinedPdf(blankPdf, maxScoreVal);
+            })
+            .then(function(combinedBytes) {
+              setProgress(90, 'Saving to Drive...');
+              var b64      = uint8ToBase64(combinedBytes);
+              var fileName = 'Assessments_' + sheetConfig.sheetName + '_' + todayString() + '.pdf';
+              return new Promise(function(resolve, reject) {
+                google.script.run
+                  .withSuccessHandler(resolve)
+                  .withFailureHandler(function(e) { reject(new Error(e.message)); })
+                  .saveGeneratedAssessment(b64, assessmentFileId, fileName);
+              });
+            })
+            .then(function(result) {
+              setProgress(100, 'Done!');
+              document.getElementById('s2title').classList.add('confirmed');
+              showStatus('s2status', 'success', 'Assessment PDF generated successfully!');
+              var link = document.createElement('a');
+              link.href = result.url;
+              link.target = '_blank';
+              link.className = 'result-link';
+              link.textContent = 'Open ' + result.fileName + ' in Drive';
+              document.getElementById('resultArea').appendChild(link);
+            })
+            .catch(function(err) {
+              setProgress(0, '');
+              document.getElementById('progressWrap').style.display = 'none';
+              showStatus('s2status', 'error', 'Error: ' + err.message);
+              document.getElementById('runBtn').disabled = false;
+            });
+          },
+          function(err) {
+            showStatus('s2status', 'error', 'Could not load QR library: ' + err);
+            document.getElementById('runBtn').disabled = false;
+          }
+        );
+      },
+      function(err) {
+        showStatus('s2status', 'error', 'Could not load PDF library: ' + err);
+        document.getElementById('runBtn').disabled = false;
+      }
+    );
+  }
+
+  // ── Core PDF builder ─────────────────────────────────────
+
+  /**
+   * For each student:
+   *   1. Generate a QR code as a PNG data URL using qrcode.js
+   *   2. Copy all pages of the blank assessment
+   *   3. Stamp a white header bar + student name + QR code onto every page
+   * All students are combined into one output PDF.
+   */
+  function buildCombinedPdf(blankPdf, maxScore) {
+    var outputPdf     = null;
+    var totalStudents = students.length;
+    var pageCount     = blankPdf.getPageCount();
+
+    return PDFDocument.create()
+      .then(function(doc) {
+        outputPdf = doc;
+        return processStudentPages(blankPdf, outputPdf, 0, totalStudents, pageCount, maxScore);
+      })
+      .then(function() {
+        return outputPdf.save();
+      });
+  }
+
+  function processStudentPages(blankPdf, outputPdf, studentIndex, total, pageCount, maxScore) {
+    if (studentIndex >= total) { return Promise.resolve(); }
+
+    var student = students[studentIndex];
+    var pct     = 20 + Math.round((65 / total) * studentIndex);
+    setProgress(pct, 'Stamping: ' + student.name + ' (' + (studentIndex + 1) + '/' + total + ')...');
+
+    // Generate one QR per page — each encodes "studentId|pNofTotal"
+    // so the splitter can group pages by student AND order them correctly.
+    var indices = [];
+    for (var p = 0; p < pageCount; p++) { indices.push(p); }
+
+    return outputPdf.copyPages(blankPdf, indices)
+      .then(function(copiedPages) {
+        return stampPagesWithPerPageQR(outputPdf, copiedPages, student, pageCount, maxScore);
+      })
+      .then(function() {
+        // Double-sided printing requires an even page count per student.
+        // If the assessment has an odd number of pages, append one plain blank page
+        // with no header or QR so the scanner ignores it when splitting back.
+        if (pageCount % 2 !== 0) {
+          var firstPage = blankPdf.getPage(0);
+          var blankPage = outputPdf.addPage([firstPage.getWidth(), firstPage.getHeight()]);
+          blankPage.drawRectangle({
+            x: 0, y: 0,
+            width: firstPage.getWidth(), height: firstPage.getHeight(),
+            color: window.PDFLib.rgb(1, 1, 1),
+          });
+        }
+        return processStudentPages(blankPdf, outputPdf, studentIndex + 1, total, pageCount, maxScore);
+      });
+  }
+
+  /**
+   * Generates a unique QR code per page encoding "studentId|pNofTotal",
+   * then stamps each page individually.
+   */
+  function stampPagesWithPerPageQR(outputPdf, pages, student, pageCount, maxScore) {
+    var chain = Promise.resolve();
+
+    // Build outcome payload for page 1 QR — encoded once, read by splitter
+    // Format: studentId|p1ofN|OC:sheetName|O:text~yPct~page|O:...
+    // Uses ~ and | as delimiters (safe — outcome text won't contain these)
+    var outcomePayload = '';
+    if (outcomesConfig && detectedOutcomes.length > 0) {
+      outcomePayload = '|OC:' + outcomesConfig.sheetName;
+      detectedOutcomes.forEach(function(o) {
+        // Sanitise text — remove any | or ~ characters just in case
+        var safeText = o.text.replace(/[|~]/g, ' ').trim();
+        outcomePayload += '|O:' + safeText + '~' + o.yPct + '~' + o.page;
+      });
+    }
+
+    pages.forEach(function(page, i) {
+      var pageNum = i + 1;
+      // Only page 1 carries the outcome payload — other pages use short format
+      var qrData = student.id + '|p' + pageNum + 'of' + pageCount +
+                   (pageNum === 1 ? outcomePayload : '');
+      chain = chain.then(function() {
+        return generateQrDataUrl(qrData).then(function(qrDataUrl) {
+          return stampPages(outputPdf, [page], student, qrDataUrl, maxScore, pageNum, pageCount);
+        });
+      });
+    });
+    return chain;
+  }
+
+  /**
+   * Stamps a header onto each page:
+   *
+   *  ┌──────────────────────────────────────────┬──────┐
+   *  │ Student Name                             │      │
+   *  │ ID: 123      Score: [   ] out of [   ]   │  QR  │
+   *  └──────────────────────────────────────────┴──────┘
+   *
+   * Score boxes are drawn as empty rectangles sized for 2-3 digit handwriting.
+   * If maxScore is provided the "out of" box is pre-filled with the value.
+   *
+   * SCORE_BOX constants are exported on window so Sidebar.html can crop
+   * the same region when reading scores back.
+   */
+  function stampPages(outputPdf, pages, student, qrDataUrl, maxScore, pageNum, pageTotal) {
+    var H      = 58;   // header height in points — must match STAMP_H in Sidebar.html
+    var PAD    = 8;    // gap between banner bottom and scaled content top
+    var MARGIN = 36;   // inset for banner only (~12.7mm) — keeps QR clear of printer bleed
+    var rgb    = window.PDFLib.rgb;
+
+    return embedQrImage(outputPdf, qrDataUrl)
+      .then(function(qrImage) {
+        var chain = Promise.resolve();
+        for (var i = 0; i < pages.length; i++) {
+          (function(originalPage) {
+            chain = chain.then(function() {
+              var W     = originalPage.getWidth();
+              var pageH = originalPage.getHeight();
+
+              var newPage = outputPdf.addPage([W, pageH]);
+
+              // ── White header bar — inset from all edges ─────────────────
+              // Banner sits MARGIN pts from top, left and right edges
+              var barX = MARGIN;
+              var barW = W - MARGIN * 2;
+              var barY = pageH - H - MARGIN;   // top edge = pageH - MARGIN, bottom = barY
+
+              newPage.drawRectangle({
+                x: barX, y: barY, width: barW, height: H,
+                color: rgb(1, 1, 1),
+              });
+              newPage.drawLine({
+                start: { x: barX, y: barY }, end: { x: barX + barW, y: barY },
+                thickness: 0.5, color: rgb(0.7, 0.7, 0.7),
+              });
+
+              // ── QR code — right side, inset from right edge ───────────
+              var qrSize = H - 10;
+              var qrX    = barX + barW - qrSize - 6;
+              var qrY    = barY + 5;
+              newPage.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize });
+
+              // Available left-column width (between left margin and QR)
+              var textX = barX + 8;
+              var leftW = qrX - 8 - textX;
+
+              // ── Row 1: Student name ──────────────────────────────────────
+              newPage.drawText(student.name, {
+                x: textX, y: barY + H - 18,
+                size: 12, color: rgb(0, 0, 0),
+              });
+
+              // Page number — top-right of left column
+              if (pageNum && pageTotal) {
+                var pgStr = 'p.' + pageNum + ' / ' + pageTotal;
+                newPage.drawText(pgStr, {
+                  x: textX + leftW - (pgStr.length * 4.5),
+                  y: barY + H - 16,
+                  size: 7.5, color: rgb(0.55, 0.55, 0.55),
+                });
+              }
+
+              // ── Row 2: ID  |  Score: [box] out of [box] — first page only ─
+              var row2Y      = barY + 8;
+              var charW8     = 4.5;
+
+              newPage.drawText('ID: ' + student.id, {
+                x: textX, y: row2Y,
+                size: 8, color: rgb(0.4, 0.4, 0.4),
+              });
+
+              // Score boxes only on page 1 — no point showing on subsequent pages
+              if (pageNum === 1) {
+                var boxW       = 26;
+                var boxH       = 12;
+                var scoreLabel = 'Score: ';
+                var outofLabel = ' out of ';
+
+                var scoreSectionW = (scoreLabel.length * charW8) + boxW +
+                                    (outofLabel.length * charW8) + boxW;
+                var scoreStartX   = textX + (leftW - scoreSectionW) / 2;
+
+                newPage.drawText(scoreLabel, {
+                  x: scoreStartX, y: row2Y,
+                  size: 8, color: rgb(0.2, 0.2, 0.2),
+                });
+
+                var scoreBoxX = scoreStartX + (scoreLabel.length * charW8);
+                var scoreBoxY = row2Y - 2;
+                newPage.drawRectangle({
+                  x: scoreBoxX, y: scoreBoxY, width: boxW, height: boxH,
+                  borderColor: rgb(0.3, 0.3, 0.3), borderWidth: 0.75,
+                  color: rgb(1, 1, 1),
+                });
+
+                var outofX = scoreBoxX + boxW;
+                newPage.drawText(outofLabel, {
+                  x: outofX, y: row2Y,
+                  size: 8, color: rgb(0.2, 0.2, 0.2),
+                });
+
+                var outofBoxX = outofX + (outofLabel.length * charW8);
+                newPage.drawRectangle({
+                  x: outofBoxX, y: scoreBoxY, width: boxW, height: boxH,
+                  borderColor: rgb(0.3, 0.3, 0.3), borderWidth: 0.75,
+                  color: rgb(1, 1, 1),
+                });
+
+                if (maxScore !== null) {
+                  var maxStr = String(maxScore);
+                  newPage.drawText(maxStr, {
+                    x: outofBoxX + (boxW - maxStr.length * charW8) / 2,
+                    y: scoreBoxY + 2,
+                    size: 8, color: rgb(0.2, 0.2, 0.2),
+                  });
+                }
+              }
+
+              // ── Scale original content to fill below banner ─────────────
+              // Content fills the full page width and sits flush to the bottom —
+              // no side or bottom margins. Only the banner above has the inset.
+              return outputPdf.embedPage(originalPage).then(function(embedded) {
+                var availH  = barY - PAD;        // from page bottom up to just below banner
+                var scale   = availH / pageH;    // scale so content height fits this space
+
+                var scaledW = W * scale;
+                var scaledH = pageH * scale;
+                var xOff    = (W - scaledW) / 2; // centre horizontally
+                var yOff    = 0;                 // flush to bottom of page
+
+                newPage.drawPage(embedded, {
+                  x: xOff, y: yOff,
+                  xScale: scale, yScale: scale,
+                });
+              });
+            });
+          })(pages[i]);
+        }
+        return chain;
+      });
+  }
+
+  // ── QR code generation ───────────────────────────────────
+
+  /**
+   * Uses qrcode.js to render a QR code to a hidden canvas,
+   * then returns it as a PNG data URL.
+   */
+  function generateQrDataUrl(text) {
+    return new Promise(function(resolve, reject) {
+      var container = document.createElement('div');
+      container.style.position = 'absolute';
+      container.style.left     = '-9999px';
+      document.body.appendChild(container);
+
+      try {
+        new QRCode(container, {
+          text:          String(text),
+          width:         128,
+          height:        128,
+          correctLevel:  QRCode.CorrectLevel.M,
+        });
+        // qrcode.js creates a canvas inside the container
+        setTimeout(function() {
+          var canvas = container.querySelector('canvas');
+          if (!canvas) { reject(new Error('QR canvas not created for: ' + text)); return; }
+          var dataUrl = canvas.toDataURL('image/png');
+          document.body.removeChild(container);
+          resolve(dataUrl);
+        }, 50);
+      } catch (e) {
+        document.body.removeChild(container);
+        reject(e);
+      }
+    });
+  }
+
+  /**
+   * Converts a PNG data URL to a pdf-lib embedded image.
+   */
+  function embedQrImage(pdfDoc, dataUrl) {
+    // Strip the data:image/png;base64, prefix
+    var base64 = dataUrl.split(',')[1];
+    var binary  = atob(base64);
+    var bytes   = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+    return pdfDoc.embedPng(bytes);
+  }
+
+  // ── Utilities ────────────────────────────────────────────
+
+  function loadScript(src, onSuccess, onError) {
+    if (document.querySelector('script[src="' + src + '"]')) { onSuccess(); return; }
+    var s = document.createElement('script');
+    s.src = src; s.onload = onSuccess;
+    s.onerror = function() { onError('Failed to load ' + src); };
+    document.head.appendChild(s);
+  }
+
+  function uint8ToBase64(bytes) {
+    var binary = '';
+    var chunk  = 32768;
+    for (var i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  function toggleStep(bodyId, chevId) {
+    var body      = document.getElementById(bodyId);
+    var chev      = document.getElementById(chevId);
+    var collapsed = body.classList.toggle('collapsed');
+    if (collapsed) { chev.classList.remove('open'); } else { chev.classList.add('open'); }
+  }
+
+  function collapseStep(bodyId, chevId) {
+    document.getElementById(bodyId).classList.add('collapsed');
+    document.getElementById(chevId).classList.remove('open');
+  }
+
+  function setProgress(pct, label) {
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = label;
+  }
+
+  function showStatus(id, type, msg) {
+    var el = document.getElementById(id);
+    el.className = 'status ' + type;
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function todayString() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
+</script>
+</body>
+</html>

@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Google Sans', Arial, sans-serif;
+      font-size: 13px;
+      color: #202124;
+      background: #f8f9fa;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      background: #1a73e8;
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .header h2 { font-size: 15px; font-weight: 500; }
+    .steps { display: flex; flex-direction: column; overflow-y: auto; flex: 1; }
+    .step { background: white; border-bottom: 1px solid #e8eaed; padding: 14px 16px; }
+    .step-header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      cursor: pointer; user-select: none;
+    }
+    .step-title {
+      font-weight: 600; font-size: 12px; color: #1a73e8;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .step-title.confirmed { color: #188038; }
+    .step-chevron { font-size: 11px; color: #9aa0a6; transition: transform 0.2s; }
+    .step-chevron.open { transform: rotate(180deg); }
+    .step-body { margin-top: 10px; }
+    .step-body.collapsed { display: none; }
+    .confirmed-badge { font-size: 11px; color: #188038; margin-top: 3px; display: none; }
+    .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .config-grid .full { grid-column: 1 / -1; }
+    input[type="text"], input[type="number"] {
+      width: 100%; border: 1px solid #dadce0; border-radius: 4px;
+      padding: 7px 10px; font-size: 13px; outline: none; transition: border-color 0.15s;
+    }
+    input:focus { border-color: #1a73e8; }
+    input.valid   { border-color: #188038; background: #f0faf3; }
+    input.invalid { border-color: #d93025; background: #fdf3f2; }
+    label { display: block; font-size: 11px; color: #5f6368; margin-bottom: 3px; font-weight: 500; }
+    .field-hint { font-size: 10px; color: #9aa0a6; margin-top: 2px; line-height: 1.4; }
+    select {
+      width: 100%; border: 1px solid #dadce0; border-radius: 4px;
+      padding: 7px 10px; font-size: 13px; background: white; outline: none;
+    }
+    select:focus { border-color: #1a73e8; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border: none; border-radius: 4px;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: #1a73e8; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #1557b0; }
+    .btn-success { background: #188038; color: white; }
+    .btn-success:hover:not(:disabled) { background: #0d6329; }
+    .btn-outline { background: white; color: #1a73e8; border: 1px solid #1a73e8; }
+    .btn-outline:hover:not(:disabled) { background: #e8f0fe; }
+    .btn-sm    { padding: 5px 10px; font-size: 12px; }
+    .btn-block { width: 100%; justify-content: center; margin-top: 8px; }
+    .file-row { display: flex; gap: 6px; align-items: flex-end; }
+    .file-row input { flex: 1; }
+    .info-box {
+      background: #e8f0fe; border-radius: 4px; padding: 8px 12px;
+      font-size: 12px; color: #1a73e8; margin-top: 8px; display: none; line-height: 1.5;
+    }
+    .progress-wrap { display: none; margin-top: 8px; }
+    .progress-bar-bg { background: #e8eaed; border-radius: 99px; height: 6px; margin-bottom: 6px; }
+    .progress-bar { background: #1a73e8; height: 6px; border-radius: 99px; width: 0%; transition: width 0.3s; }
+    .status { font-size: 12px; padding: 6px 10px; border-radius: 4px; margin-top: 8px; display: none; }
+    .status.info    { background: #e8f0fe; color: #1a73e8; }
+    .status.success { background: #e6f4ea; color: #137333; }
+    .status.error   { background: #fce8e6; color: #c5221f; }
+    .status.warn    { background: #fff3cd; color: #856404; }
+    .summary-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .summary-table th {
+      background: #f1f3f4; padding: 6px 8px; text-align: left;
+      font-weight: 600; font-size: 11px; color: #5f6368;
+    }
+    .summary-table td { padding: 6px 8px; border-bottom: 1px solid #f1f3f4; vertical-align: middle; }
+    .summary-table tr:last-child td { border-bottom: none; }
+    .warning {
+      background: #fff3cd; color: #856404; padding: 8px 12px;
+      border-radius: 4px; font-size: 12px; margin-top: 8px; display: none;
+    }
+    .results { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 180px; overflow-y: auto; }
+    .result-item { font-size: 12px; padding: 5px 8px; border-radius: 4px; }
+    .result-ok   { background: #e6f4ea; color: #137333; }
+    .result-fail { background: #fce8e6; color: #c5221f; }
+    .table-wrap  { max-height: 220px; overflow-y: auto; border: 1px solid #e8eaed; border-radius: 4px; }
+    hr { border: none; border-top: 1px solid #e8eaed; margin: 10px 0; }
+    .preview-chip {
+      display: inline-flex; align-items: center; background: #e8f0fe; color: #1a73e8;
+      border-radius: 99px; padding: 3px 10px; font-size: 11px; font-weight: 500; margin-top: 4px;
+    }
+    /* ── Mode toggle ── */
+    .mode-toggle {
+      display: flex; align-items: center; gap: 10px;
+      background: #f1f3f4; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;
+    }
+    .mode-toggle input[type="checkbox"] {
+      width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #1a73e8;
+      flex-shrink: 0;
+    }
+    .mode-toggle-text { font-size: 12px; color: #202124; line-height: 1.4; }
+    .mode-toggle-text strong { display: block; font-size: 12px; margin-bottom: 1px; }
+    /* ── Manual mode: pages-per-student ── */
+    .pps-row {
+      display: flex; align-items: flex-end; gap: 10px;
+      background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 6px; padding: 10px 12px;
+    }
+    .pps-row > div:first-child { width: 80px; flex-shrink: 0; }
+    .pps-row > div:last-child  { flex: 1; }
+    .assign-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    .assign-table th {
+      background: #f1f3f4; padding: 5px 8px; text-align: left;
+      font-weight: 600; font-size: 11px; color: #5f6368; border-bottom: 1px solid #e8eaed;
+    }
+    .assign-table td { padding: 5px 8px; border-bottom: 1px solid #f1f3f4; vertical-align: middle; }
+    .assign-table tr:last-child td { border-bottom: none; }
+    .page-badge {
+      background: #e8f0fe; color: #1a73e8; border-radius: 99px;
+      padding: 2px 8px; font-size: 11px; font-weight: 500; white-space: nowrap;
+    }
+    /* checkbox column in manual table */
+    .assign-table td:first-child, .assign-table th:first-child { width: 28px; text-align: center; }
+    /* ── Page count check banner ── */
+    .page-check {
+      border-radius: 6px; padding: 9px 12px; font-size: 12px;
+      line-height: 1.5; margin-top: 10px; display: none;
+    }
+    .page-check.ok   { background: #e6f4ea; color: #137333; border: 1px solid #a8d5b5; }
+    .page-check.warn { background: #fff3cd; color: #856404; border: 1px solid #ffe082; }
+    .page-check strong { display: block; margin-bottom: 2px; }
+    /* ── Score entry panel ── */
+    .score-row {
+      display: flex; flex-direction: column; gap: 6px;
+      border: 1px solid #e8eaed; border-radius: 6px;
+      padding: 8px 10px; background: #fafafa;
+    }
+    .score-row canvas { border: 1px solid #dadce0; border-radius: 3px;
+                        width: 100%; height: auto; display: block; }
+    .score-right { display: flex; flex-direction: column; gap: 5px; }
+    .score-name { font-size: 12px; font-weight: 600; color: #202124; }
+    .score-input { width: 100%; text-align: center;
+                   border: 2px solid #dadce0; border-radius: 6px;
+                   padding: 10px 8px; font-size: 22px; font-weight: 600;
+                   outline: none; color: #202124; }
+    .score-input:focus { border-color: #1a73e8; background: #f0f7ff; }
+    .score-written { font-size: 11px; color: #188038; display: none; }
+    /* ── Unassigned pages ── */
+    .unassigned-row {
+      border: 1px solid #ffe082; border-radius: 6px; background: #fffde7;
+      padding: 8px 10px; margin-bottom: 6px;
+    }
+    .unassigned-row-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+    }
+    .unassigned-page-label { font-size: 12px; font-weight: 600; color: #856404; }
+    .unassigned-actions { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+    .assign-form {
+      background: white; border: 1px solid #ffe082; border-radius: 4px; padding: 8px; margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <span>📄</span>
+  <h2>Student PDF Splitter</h2>
+</div>
+
+<div class="steps">
+
+  <!-- ═══════════════════════════════ STEP 1: Config ═══════════════════════ -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s0body','s0chev')">
+      <div>
+        <div class="step-title" id="s0title">Step 1 — Sheet Configuration</div>
+        <div class="confirmed-badge" id="s0badge">✓ Configuration saved</div>
+      </div>
+      <span class="step-chevron open" id="s0chev">▼</span>
+    </div>
+    <div class="step-body" id="s0body">
+      <div style="margin-top:2px;">
+        <label>Sheet Tab</label>
+        <select id="sheetSelect" onchange="validateConfig()">
+          <option value="">Loading sheets...</option>
+        </select>
+        <div class="field-hint">Which tab contains the student data</div>
+      </div>
+      <hr>
+      <div class="config-grid">
+        <div>
+          <label>Student Name Column</label>
+          <input type="text" id="nameCol" maxlength="3" placeholder="e.g. B"
+                 oninput="this.value=this.value.toUpperCase();validateConfig()">
+          <div class="field-hint">Column containing student names</div>
+        </div>
+        <div>
+          <label>Student ID Column</label>
+          <input type="text" id="idCol" maxlength="3" placeholder="e.g. C"
+                 oninput="this.value=this.value.toUpperCase();validateConfig()">
+          <div class="field-hint">IDs encoded in QR codes</div>
+        </div>
+        <div>
+          <label>Link Destination Column</label>
+          <input type="text" id="linkCol" maxlength="3" placeholder="e.g. H"
+                 oninput="this.value=this.value.toUpperCase();validateConfig()">
+          <div class="field-hint">Where PDF links will be written</div>
+        </div>
+        <div>
+          <label>Score Column</label>
+          <input type="text" id="scoreCol" maxlength="3" placeholder="e.g. I"
+                 oninput="this.value=this.value.toUpperCase();validateConfig()">
+          <div class="field-hint">Where raw scores will be written</div>
+        </div>
+        <div>
+          <label>First Data Row</label>
+          <input type="number" id="dataStartRow" min="1" value="2" oninput="validateConfig()">
+          <div class="field-hint">Row where student data begins</div>
+        </div>
+      </div>
+      <div id="configPreview" style="display:none;margin-top:10px;">
+        <div style="font-size:11px;color:#5f6368;margin-bottom:3px;">Reading from:</div>
+        <span class="preview-chip" id="configChip">-</span>
+      </div>
+      <div class="status" id="s0status"></div>
+      <button class="btn btn-primary btn-block" id="confirmConfigBtn" onclick="confirmConfig()" disabled>
+        Confirm and Load Students
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ STEP 2: Load PDF ════════════════════ -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s1body','s1chev')">
+      <div>
+        <div class="step-title" id="s1title">Step 2 — Load Scanned PDF</div>
+        <div class="confirmed-badge" id="s1badge"></div>
+      </div>
+      <span class="step-chevron open" id="s1chev">▼</span>
+    </div>
+    <div class="step-body" id="s1body">
+      <p style="font-size:12px;color:#5f6368;margin-bottom:8px;">
+        Upload the scanned PDF to Drive first, then paste the file ID or share link.
+      </p>
+      <label>Drive File ID or Share Link</label>
+      <div class="file-row">
+        <input type="text" id="fileIdInput" placeholder="Paste file ID or Drive URL…">
+        <button class="btn btn-outline btn-sm" onclick="validateFile()">Load</button>
+      </div>
+      <div class="info-box" id="fileInfo"></div>
+      <div class="status" id="s1status"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ STEP 3: Split ═══════════════════════ -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s2body','s2chev')">
+      <div>
+        <div class="step-title" id="s2title">Step 3 — Split &amp; Link</div>
+        <div class="confirmed-badge" id="s2badge"></div>
+      </div>
+      <span class="step-chevron open" id="s2chev">▼</span>
+    </div>
+    <div class="step-body" id="s2body">
+
+      <!-- ── Mode toggle ── -->
+      <div class="mode-toggle">
+        <input type="checkbox" id="qrModeCheck" checked onchange="onModeChange()">
+        <div class="mode-toggle-text">
+          <strong>Assessment has QR codes</strong>
+          Pages will be detected automatically by scanning for QR codes.
+          Uncheck if the assessment was not printed from the generator.
+        </div>
+      </div>
+
+      <!-- ════════ QR MODE ════════ -->
+      <div id="qrMode">
+        <p style="font-size:12px;color:#5f6368;margin-bottom:10px;">
+          Scans every page for QR codes and groups them by student.
+          Pages can be in any order. Students with no pages detected are skipped.
+        </p>
+        <button class="btn btn-primary btn-block" id="scanBtn" onclick="scanAllQRs()" disabled>
+          🔍 Scan Pages for QR Codes
+        </button>
+        <div class="progress-wrap" id="scanProgress">
+          <div class="progress-bar-bg"><div class="progress-bar" id="scanBar"></div></div>
+          <div id="scanLabel" style="font-size:12px;color:#5f6368;margin-top:4px;">Ready…</div>
+        </div>
+        <div id="detectionSummary" style="display:none;margin-top:12px;">
+          <div style="font-size:11px;font-weight:600;color:#5f6368;margin-bottom:4px;">Detected Page Assignment</div>
+          <div class="table-wrap">
+            <table class="summary-table">
+              <thead><tr><th>Student</th><th>ID</th><th>Pages</th><th>Page Numbers</th></tr></thead>
+              <tbody id="summaryBody"></tbody>
+            </table>
+          </div>
+          <div id="qrWarnings" class="warning"></div>
+          <div id="unassignedPages" style="margin-top:10px;display:none;"></div>
+        </div>
+        <!-- Split button appears after scan -->
+        <div id="qrSplitSection" style="display:none;margin-top:12px;">
+          <hr>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;
+                         color:#5f6368;margin-bottom:8px;cursor:pointer;">
+            <input type="checkbox" id="skipOutcomesQR" style="width:14px;height:14px;
+                   accent-color:#1a73e8;flex-shrink:0;">
+            This assessment has no outcome markers — skip outcome detection
+          </label>
+          <button class="btn btn-success btn-block" id="qrRunBtn" onclick="runSplit()">
+            ▶ Split PDFs &amp; Link to Sheet
+          </button>
+        </div>
+      </div>
+
+      <!-- ════════ MANUAL MODE ════════ -->
+      <div id="manualMode" style="display:none;">
+        <p style="font-size:12px;color:#5f6368;margin-bottom:10px;">
+          Enter how many pages each student's assessment takes up.
+          The PDF will be split in sheet order. Uncheck students who were absent.
+        </p>
+        <div class="pps-row">
+          <div>
+            <label>Pages each</label>
+            <input type="number" id="pagesPerStudent" min="1" max="99" placeholder="4"
+                   oninput="onPagesChanged()">
+          </div>
+          <div style="font-size:11px;color:#5f6368;line-height:1.5;" id="ppsHint">
+            Enter a number to preview the assignment below.
+          </div>
+        </div>
+        <div id="manualPreview" style="display:none;margin-top:10px;">
+          <div style="font-size:11px;font-weight:600;color:#5f6368;margin-bottom:4px;">
+            Page Assignment Preview
+            <span style="font-weight:400;margin-left:6px;">— uncheck absent students</span>
+          </div>
+          <div class="table-wrap">
+            <table class="assign-table">
+              <thead>
+                <tr><th>✓</th><th>#</th><th>Student</th><th>Pages</th></tr>
+              </thead>
+              <tbody id="manualTableBody"></tbody>
+            </table>
+          </div>
+          <div style="font-size:11px;color:#5f6368;margin-top:6px;" id="manualSummary"></div>
+          <!-- Page count sanity check -->
+          <div class="page-check" id="pageCheck"></div>
+          <button class="btn btn-success btn-block" id="manualRunBtn"
+                  onclick="runManualSplit()" disabled style="margin-top:10px;">
+            ▶ Split PDFs &amp; Link to Sheet
+          </button>
+        </div>
+      </div>
+
+      <!-- Shared progress + results (both modes use these) -->
+      <div class="progress-wrap" id="splitProgress" style="margin-top:12px;">
+        <div class="progress-bar-bg"><div class="progress-bar" id="splitBar"></div></div>
+        <div id="splitLabel" style="font-size:12px;color:#5f6368;margin-top:4px;">Working…</div>
+      </div>
+      <div class="results" id="results"></div>
+      <div class="status" id="s2status"></div>
+
+    </div>
+  </div>
+
+</div><!-- end .steps -->
+
+  <!-- ═══════════════════════════════ STEP 4: Score Entry ═════════════════ -->
+  <!-- Inserted outside .steps so it sits below as a full-width panel -->
+  <div class="step" id="scoreStep" style="display:none;">
+    <div class="step-header" onclick="toggleStep('s3body','s3chev')">
+      <div>
+        <div class="step-title" id="s3title">Step 4 — Enter Scores</div>
+        <div class="confirmed-badge" id="s3badge"></div>
+      </div>
+      <span class="step-chevron open" id="s3chev">▼</span>
+    </div>
+    <div class="step-body" id="s3body">
+      <p style="font-size:12px;color:#5f6368;margin-bottom:10px;">
+        Each student's score box is cropped from their PDF.
+        Glance at the handwriting and type the score — leave blank to skip.
+      </p>
+
+      <!-- Crop calibration tool -->
+      <details id="calibrationDetails" style="margin-bottom:10px;">
+        <summary style="font-size:11px;font-weight:600;color:#1a73e8;cursor:pointer;
+                        text-transform:uppercase;letter-spacing:0.4px;padding:4px 0;">
+          🎯 Calibrate crop region
+        </summary>
+        <div style="margin-top:8px;background:#f8f9fa;border:1px solid #e8eaed;
+                    border-radius:6px;padding:10px 12px;">
+          <p style="font-size:11px;color:#5f6368;margin-bottom:8px;line-height:1.5;">
+            Drag the blue box to cover the score area on the banner below,
+            then copy the coordinates shown and send them to update the crop region.
+          </p>
+          <div style="position:relative;display:inline-block;width:100%;">
+            <canvas id="calibCanvas" style="width:100%;border:1px solid #dadce0;
+                    border-radius:4px;display:block;cursor:crosshair;"></canvas>
+            <!-- Drag handle overlay -->
+            <div id="calibBox" style="position:absolute;border:2px solid #1a73e8;
+                 background:rgba(26,115,232,0.12);box-sizing:border-box;cursor:move;
+                 display:none;">
+              <div id="calibResizeHandle" style="position:absolute;right:-4px;bottom:-4px;
+                   width:10px;height:10px;background:#1a73e8;cursor:se-resize;border-radius:2px;">
+              </div>
+            </div>
+          </div>
+          <div id="calibCoords" style="font-family:monospace;font-size:11px;color:#202124;
+               background:#f1f3f4;border-radius:4px;padding:6px 8px;margin-top:6px;display:none;">
+          </div>
+          <button class="btn btn-outline btn-block" id="calibBtn"
+                  onclick="startCalibration()" style="margin-top:6px;font-size:12px;">
+            Render first student's page for calibration
+          </button>
+        </div>
+      </details>
+
+      <div id="scoreRows" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <button class="btn btn-success btn-block" id="writeScoresBtn"
+              onclick="writeScores()" style="margin-top:12px;" disabled>
+        ✎ Write Scores to Sheet
+      </button>
+      <div class="status" id="s3status"></div>
+    </div>
+  </div>
+
+<script>
+  // ── State ────────────────────────────────────────────────────────────────
+  var pdfFileId       = null;
+  var totalPdfPages   = null;   // set when PDF is loaded in Step 2
+  var studentList     = [];     // [{name, id}]
+  var sheetConfig     = null;
+  var configConfirmed = false;
+  var fileConfirmed   = false;
+
+  // QR mode
+  var detectionDone  = false;
+  var idToName       = {};   // id → name
+  var pageGroups     = {};   // id → [1-based page numbers]
+  var masterPdf      = null; // PDFLib.PDFDocument cached from scan
+  var masterPdfJs    = null; // pdf.js document kept alive for rescans
+  var rawGroups      = {};   // id → [{pdfPage, pageNum}] kept for reassignment
+  var unassignedPages = [];  // 1-based page numbers where no QR was found
+
+  // Score entry — populated after split completes
+  var splitStudentDocs = [];  // [{name, id, pdfBytes}] kept for score cropping
+  var outcomeMap       = {};  // studentId → {sheetName, outcomes:[{text,yPct,page}]}
+
+  // ── Init ─────────────────────────────────────────────────────────────────
+  window.addEventListener('load', function() {
+    setTimeout(function() { loadSheetNames(0); }, 400);
+  });
+
+  // ── Sheet loading ─────────────────────────────────────────────────────────
+  function loadSheetNames(attempt) {
+    var MAX = 6;
+    var sel = document.getElementById('sheetSelect');
+    if (attempt > 0) sel.innerHTML = '<option>Retrying (' + attempt + '/' + MAX + ')…</option>';
+    google.script.run
+      .withSuccessHandler(function(result) {
+        var sheets     = result.names;
+        var activeName = result.active;
+        if (!sheets || !sheets.length) {
+          sel.innerHTML = '<option>No sheets found</option>';
+          return showStatus('s0status', 'error', 'No tabs found.');
+        }
+        sel.innerHTML = '';
+        sheets.forEach(function(name) {
+          var o = document.createElement('option');
+          o.value = o.textContent = name;
+          if (activeName && name === activeName) o.selected = true;
+          sel.appendChild(o);
+        });
+        if (!activeName) sel.selectedIndex = 0;
+        showStatus('s0status', 'info', 'Found ' + sheets.length + ' tab(s). Set columns below.');
+        validateConfig();
+      })
+      .withFailureHandler(function() {
+        if (attempt < MAX) setTimeout(function() { loadSheetNames(attempt + 1); }, 1000 + attempt * 600);
+        else { sel.innerHTML = '<option>Failed</option>'; showStatus('s0status', 'error', 'Could not load sheet names.'); }
+      })
+      .getSheetNamesWithActive();
+  }
+
+  // ── Step 1: Config ────────────────────────────────────────────────────────
+  function validateConfig() {
+    var nameCol  = document.getElementById('nameCol').value.trim();
+    var idCol    = document.getElementById('idCol').value.trim();
+    var linkCol  = document.getElementById('linkCol').value.trim();
+    var scoreCol = document.getElementById('scoreCol').value.trim();
+    var rowStr   = document.getElementById('dataStartRow').value.trim();
+    var sheet    = document.getElementById('sheetSelect').value;
+    var colRx    = /^[A-Z]{1,3}$/;
+    var rowOk    = /^\d+$/.test(rowStr) && parseInt(rowStr, 10) >= 1;
+    var allOk    = colRx.test(nameCol) && colRx.test(idCol) && colRx.test(linkCol) && rowOk && !!sheet;
+    document.getElementById('confirmConfigBtn').disabled = !allOk;
+    if (allOk) {
+      document.getElementById('configPreview').style.display = 'block';
+      var chip = '"' + sheet + '" | Names:' + nameCol + ' | IDs:' + idCol +
+                 ' | Links:' + linkCol;
+      if (colRx.test(scoreCol)) chip += ' | Scores:' + scoreCol;
+      chip += ' | from row ' + rowStr;
+      document.getElementById('configChip').textContent = chip;
+    } else {
+      document.getElementById('configPreview').style.display = 'none';
+    }
+  }
+
+  function confirmConfig() {
+    var nameCol  = document.getElementById('nameCol').value.trim().toUpperCase();
+    var idCol    = document.getElementById('idCol').value.trim().toUpperCase();
+    var linkCol  = document.getElementById('linkCol').value.trim().toUpperCase();
+    var scoreCol = document.getElementById('scoreCol').value.trim().toUpperCase();
+    var row      = parseInt(document.getElementById('dataStartRow').value, 10);
+    var sheet    = document.getElementById('sheetSelect').value;
+    var colRx    = /^[A-Z]{1,3}$/;
+
+    // Columns that must be unique (scoreCol is optional, only add if filled)
+    var usedCols = [nameCol, idCol, linkCol];
+    if (colRx.test(scoreCol)) usedCols.push(scoreCol);
+    if (new Set(usedCols).size !== usedCols.length) {
+      return showStatus('s0status', 'error', 'All configured columns must be different.');
+    }
+
+    sheetConfig = {
+      sheetName: sheet, nameCol: nameCol, idCol: idCol,
+      linkCol: linkCol, dataStartRow: row,
+      scoreCol: colRx.test(scoreCol) ? scoreCol : null,
+    };
+    showStatus('s0status', 'info', 'Loading students…');
+    google.script.run
+      .withSuccessHandler(function(students) {
+        studentList = students || [];
+        idToName = {};
+        studentList.forEach(function(s) { if (s.id) idToName[s.id] = s.name; });
+        configConfirmed = true;
+        document.getElementById('s0title').classList.add('confirmed');
+        document.getElementById('s0badge').style.display = 'block';
+        showStatus('s0status', 'success', 'Loaded ' + studentList.length + ' students.');
+        collapseStep('s0body', 's0chev');
+        updateScanButton();
+      })
+      .withFailureHandler(function(err) { showStatus('s0status', 'error', err.message); })
+      .getStudentsWithConfig(sheetConfig);
+  }
+
+  // ── Step 2: Load PDF ──────────────────────────────────────────────────────
+  function validateFile() {
+    var raw = document.getElementById('fileIdInput').value.trim();
+    if (!raw) return showStatus('s1status', 'error', 'Paste a file ID or Drive URL.');
+    var match = raw.match(/[-\w]{25,}/);
+    if (!match) return showStatus('s1status', 'error', 'No valid Drive file ID found.');
+    showStatus('s1status', 'info', 'Checking file…');
+    google.script.run
+      .withSuccessHandler(function(meta) {
+        pdfFileId = meta.id;
+        fileConfirmed = true;
+        document.getElementById('s1badge').textContent = meta.name;
+        document.getElementById('s1badge').style.display = 'block';
+        document.getElementById('fileInfo').textContent = 'Loaded: ' + meta.name;
+        document.getElementById('fileInfo').style.display = 'block';
+        showStatus('s1status', 'info', 'PDF confirmed. Counting pages…');
+        // Do NOT collapse yet — wait until page count completes
+
+        google.script.run
+          .withSuccessHandler(function(count) {
+            totalPdfPages = count;
+            showStatus('s1status', 'success', 'PDF ready — ' + count + ' pages.');
+            document.getElementById('s1title').classList.add('confirmed');
+            collapseStep('s1body', 's1chev');
+            updateScanButton();
+          })
+          .withFailureHandler(function() {
+            totalPdfPages = null;
+            showStatus('s1status', 'success', 'PDF ready.');
+            document.getElementById('s1title').classList.add('confirmed');
+            collapseStep('s1body', 's1chev');
+            updateScanButton();
+          })
+          .getPdfPageCount(pdfFileId);
+      })
+      .withFailureHandler(function(e) { showStatus('s1status', 'error', e.message || 'Failed.'); })
+      .validatePdfFile(match[0]);
+  }
+
+  function updateScanButton() {
+    var ready = configConfirmed && fileConfirmed;
+    document.getElementById('scanBtn').disabled = !ready;
+    // Also refresh manual preview if pages-per-student already entered
+    if (ready) onPagesChanged();
+  }
+
+  // ── Step 3: Mode toggle ───────────────────────────────────────────────────
+  function onModeChange() {
+    var qr = document.getElementById('qrModeCheck').checked;
+    document.getElementById('qrMode').style.display     = qr ? 'block' : 'none';
+    document.getElementById('manualMode').style.display = qr ? 'none'  : 'block';
+    // Reset shared results when switching
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('splitProgress').style.display = 'none';
+    hideStatus('s2status');
+  }
+
+  // ── QR mode: Scan ─────────────────────────────────────────────────────────
+  function scanAllQRs() {
+    document.getElementById('scanBtn').disabled = true;
+    document.getElementById('scanProgress').style.display = 'block';
+    document.getElementById('detectionSummary').style.display = 'none';
+    document.getElementById('qrSplitSection').style.display = 'none';
+    document.getElementById('results').innerHTML = '';
+    detectionDone = false;
+    masterPdf = null;
+    masterPdfJs = null;
+    pageGroups = {};
+    rawGroups = {};
+    unassignedPages = [];
+    outcomeMap = {};
+
+    showStatus('s2status', 'info', 'Loading libraries…');
+
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', function() {
+      loadScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js', function() {
+        loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js', function() {
+
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+          showStatus('s2status', 'info', 'Downloading PDF… 0%');
+          fetchPdfInChunks(pdfFileId, function(pct) {
+            showStatus('s2status', 'info', 'Downloading PDF… ' + pct + '%');
+          })
+          .then(function(bytes) {
+
+              // Give pdf-lib and pdf.js SEPARATE copies of the bytes.
+              // pdf.js transfers the buffer as a Transferable (zeroing the original),
+              // which would corrupt masterPdf if both shared the same Uint8Array.
+              var bytesForPdfLib  = bytes.slice();   // independent copy for pdf-lib
+              var bytesForPdfJs   = bytes;            // pdf.js can have the original
+
+              // Pre-load into pdf-lib so split step doesn't need to re-fetch
+              PDFLib.PDFDocument.load(bytesForPdfLib, { ignoreEncryption: true })
+                .then(function(doc) { masterPdf = doc; })
+                .catch(function(e) { console.warn('pdf-lib preload:', e.message); });
+
+                pdfjsLib.getDocument({ data: bytesForPdfJs }).promise.then(function(pdf) {
+                masterPdfJs = pdf;
+                var n = pdf.numPages;
+                // outcomeMap is a module-level state variable — reset was done in scanAllQRs
+
+                function processPage(i) {
+                  if (i > n) {
+                    rebuildPageGroups();
+                    finishScan(n);
+                    return;
+                  }
+                  document.getElementById('scanBar').style.width = Math.round((i / n) * 100) + '%';
+                  document.getElementById('scanLabel').textContent = 'Scanning page ' + i + ' of ' + n + '…';
+                  pdf.getPage(i).then(function(pg) {
+                    var vp = pg.getViewport({ scale: 2.0 });
+                    var cv = document.createElement('canvas');
+                    cv.width = vp.width; cv.height = vp.height;
+                    pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise.then(function() {
+                      var imgData = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
+                      var qr = jsQR(imgData.data, imgData.width, imgData.height);
+                      if (qr) {
+                        // Parse QR — format: studentId|pNofTotal[|OC:sheet|O:text~yPct~page|O:...]
+                        // Split on | but protect outcome text which may have been sanitised
+                        var parts   = qr.data.split('|');
+                        var id      = parts[0];
+                        var pageFmt = parts[1] ? parts[1].match(/^p(\d+)of(\d+)$/) : null;
+
+                        if (pageFmt) {
+                          var pageNum = parseInt(pageFmt[1], 10);
+                          if (idToName[id]) {
+                            if (!rawGroups[id]) rawGroups[id] = [];
+                            rawGroups[id].push({ pdfPage: i, pageNum: pageNum });
+
+                            // Extract outcome payload from page 1 QR only
+                            if (pageNum === 1 && parts.length > 2) {
+                              var outcomes  = [];
+                              var sheetName = null;
+                              for (var p = 2; p < parts.length; p++) {
+                                if (parts[p].indexOf('OC:') === 0) {
+                                  sheetName = parts[p].substring(3);
+                                } else if (parts[p].indexOf('O:') === 0) {
+                                  var oData = parts[p].substring(2).split('~');
+                                  if (oData.length >= 3) {
+                                    outcomes.push({
+                                      text:  oData[0],
+                                      yPct:  parseFloat(oData[1]),
+                                      page:  parseInt(oData[2], 10),
+                                    });
+                                  }
+                                }
+                              }
+                              if (sheetName && outcomes.length) {
+                                outcomeMap[id] = { sheetName: sheetName, outcomes: outcomes };
+                              }
+                            }
+                          } else {
+                            unassignedPages.push(i);
+                          }
+                        } else if (idToName[qr.data]) {
+                          if (!rawGroups[qr.data]) rawGroups[qr.data] = [];
+                          rawGroups[qr.data].push({ pdfPage: i, pageNum: i });
+                        } else {
+                          unassignedPages.push(i);
+                        }
+                      } else {
+                        unassignedPages.push(i);
+                      }
+                      processPage(i + 1);
+                    });
+                  });
+                }
+                processPage(1);
+
+              }).catch(function(err) {
+                showStatus('s2status', 'error', 'Could not read PDF: ' + err.message);
+                document.getElementById('scanBtn').disabled = false;
+                document.getElementById('scanProgress').style.display = 'none';
+              });
+          })
+          .catch(function(err) {
+            showStatus('s2status', 'error', 'Could not fetch PDF: ' + err.message);
+            document.getElementById('scanBtn').disabled = false;
+            document.getElementById('scanProgress').style.display = 'none';
+          });
+
+        }, function(e) { scanLibError('pdf-lib', e); });
+      }, function(e) { scanLibError('jsQR', e); });
+    }, function(e) { scanLibError('pdf.js', e); });
+  }
+
+  function scanLibError(lib, e) {
+    showStatus('s2status', 'error', 'Could not load ' + lib + ': ' + e);
+    document.getElementById('scanBtn').disabled = false;
+  }
+
+  function finishScan(totalPages) {
+    document.getElementById('scanProgress').style.display = 'none';
+    refreshSummaryTable();
+    document.getElementById('detectionSummary').style.display = 'block';
+    buildUnassignedUI();
+    detectionDone = true;
+    document.getElementById('qrSplitSection').style.display = 'block';
+    document.getElementById('s2title').classList.add('confirmed');
+    document.getElementById('s2badge').textContent = '✓ ' + totalPages + ' pages scanned';
+    document.getElementById('s2badge').style.display = 'block';
+    showStatus('s2status', 'success', 'Scan complete — review the table, then click Split.');
+  }
+
+  function rebuildPageGroups() {
+    pageGroups = {};
+    Object.keys(rawGroups).forEach(function(id) {
+      rawGroups[id].sort(function(a, b) { return a.pageNum - b.pageNum; });
+      pageGroups[id] = rawGroups[id].map(function(entry) { return entry.pdfPage; });
+    });
+  }
+
+  function refreshSummaryTable() {
+    var tbody = document.getElementById('summaryBody');
+    tbody.innerHTML = '';
+    var missing = 0;
+    studentList.forEach(function(s) {
+      var pages = pageGroups[s.id] || [];
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + esc(s.name) + '</td><td>' + esc(s.id) + '</td><td>' + pages.length + '</td><td>' +
+        (pages.length ? pages.join(', ') : '<span style="color:#d93025">None</span>') + '</td>';
+      tbody.appendChild(tr);
+      if (!pages.length) missing++;
+    });
+    var warnEl = document.getElementById('qrWarnings');
+    if (missing) {
+      warnEl.textContent = missing + ' student(s) had no QR codes detected — they will be skipped.';
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.style.display = 'none';
+    }
+  }
+
+  function buildUnassignedUI() {
+    var container = document.getElementById('unassignedPages');
+    if (!unassignedPages.length) { container.style.display = 'none'; return; }
+    container.style.display = 'block';
+    container.innerHTML =
+      '<div style="font-size:11px;font-weight:600;color:#856404;margin-bottom:6px;">' +
+      unassignedPages.length + ' page(s) had no QR code — rescan, assign manually, or disregard:</div>';
+    unassignedPages.forEach(function(pageNum) {
+      var row = buildUnassignedRow(pageNum);
+      container.appendChild(row);
+      if (masterPdfJs) renderPageThumbnail(pageNum, row.querySelector('canvas'));
+    });
+  }
+
+  function buildUnassignedRow(pageNum) {
+    var opts = '<option value="">— Select student —</option>';
+    studentList.forEach(function(s) {
+      opts += '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>';
+    });
+    var row = document.createElement('div');
+    row.className = 'unassigned-row';
+    row.id = 'urow_' + pageNum;
+    row.innerHTML =
+      '<div class="unassigned-row-header">' +
+        '<span class="unassigned-page-label">Page ' + pageNum + '</span>' +
+        '<div class="unassigned-actions">' +
+          '<button class="btn btn-outline btn-sm" onclick="rescanUnassignedPage(' + pageNum + ')">↺ Rescan</button>' +
+          '<button class="btn btn-outline btn-sm" onclick="showAssignForm(' + pageNum + ')">✏ Assign</button>' +
+          '<button class="btn btn-sm" style="background:#fce8e6;color:#c5221f;" ' +
+            'onclick="disregardUnassignedPage(' + pageNum + ')">✕ Disregard</button>' +
+        '</div>' +
+      '</div>' +
+      '<canvas style="width:100%;height:auto;display:block;border:1px solid #e8eaed;' +
+        'border-radius:3px;margin-bottom:6px;"></canvas>' +
+      '<div class="assign-form" id="aform_' + pageNum + '" style="display:none;">' +
+        '<label>Student</label>' +
+        '<select id="aStudent_' + pageNum + '" style="margin-top:2px;margin-bottom:6px;">' + opts + '</select>' +
+        '<label style="display:block;margin-top:2px;">Page # within their assessment</label>' +
+        '<input type="number" id="aPageNum_' + pageNum + '" min="1" style="margin-top:2px;margin-bottom:6px;"' +
+          ' placeholder="e.g. 2 — leave blank to order by scan position">' +
+        '<div style="display:flex;gap:6px;">' +
+          '<button class="btn btn-primary btn-sm" onclick="confirmAssign(' + pageNum + ')">Assign</button>' +
+          '<button class="btn btn-outline btn-sm" onclick="hideAssignForm(' + pageNum + ')">Cancel</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="ustatus_' + pageNum + '" style="font-size:11px;margin-top:4px;"></div>';
+    return row;
+  }
+
+  function renderPageThumbnail(pageNum, canvas) {
+    if (!masterPdfJs || !canvas) return;
+    masterPdfJs.getPage(pageNum).then(function(pg) {
+      var vp = pg.getViewport({ scale: 0.35 });
+      canvas.width  = vp.width;
+      canvas.height = vp.height;
+      pg.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.catch(function() {});
+    }).catch(function() {});
+  }
+
+  function rescanUnassignedPage(pageNum) {
+    if (!masterPdfJs) return;
+    var statusEl = document.getElementById('ustatus_' + pageNum);
+    statusEl.textContent = 'Rescanning at higher resolution…';
+    statusEl.style.color = '#5f6368';
+    masterPdfJs.getPage(pageNum).then(function(pg) {
+      var vp = pg.getViewport({ scale: 4.0 });
+      var cv = document.createElement('canvas');
+      cv.width = vp.width; cv.height = vp.height;
+      pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise.then(function() {
+        var imgData = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
+        var qr = jsQR(imgData.data, imgData.width, imgData.height);
+        if (qr) {
+          var parts   = qr.data.split('|');
+          var id      = parts[0];
+          var pageFmt = parts[1] ? parts[1].match(/^p(\d+)of(\d+)$/) : null;
+          if (pageFmt && idToName[id]) {
+            var pNum = parseInt(pageFmt[1], 10);
+            if (!rawGroups[id]) rawGroups[id] = [];
+            rawGroups[id].push({ pdfPage: pageNum, pageNum: pNum });
+            rebuildPageGroups();
+            refreshSummaryTable();
+            removeUnassignedPage(pageNum);
+            return;
+          }
+          if (idToName[qr.data]) {
+            if (!rawGroups[qr.data]) rawGroups[qr.data] = [];
+            rawGroups[qr.data].push({ pdfPage: pageNum, pageNum: pageNum });
+            rebuildPageGroups();
+            refreshSummaryTable();
+            removeUnassignedPage(pageNum);
+            return;
+          }
+        }
+        statusEl.textContent = 'Still no QR found — use Assign or Disregard.';
+        statusEl.style.color = '#c5221f';
+      });
+    }).catch(function() {
+      statusEl.textContent = 'Rescan failed — use Assign or Disregard.';
+      statusEl.style.color = '#c5221f';
+    });
+  }
+
+  function showAssignForm(pageNum) {
+    document.getElementById('aform_' + pageNum).style.display = 'block';
+  }
+
+  function hideAssignForm(pageNum) {
+    document.getElementById('aform_' + pageNum).style.display = 'none';
+  }
+
+  function confirmAssign(pageNum) {
+    var studentId = document.getElementById('aStudent_' + pageNum).value;
+    var pNumStr   = document.getElementById('aPageNum_' + pageNum).value.trim();
+    var statusEl  = document.getElementById('ustatus_' + pageNum);
+    if (!studentId) {
+      statusEl.textContent = 'Please select a student.';
+      statusEl.style.color = '#c5221f';
+      return;
+    }
+    var pNum = pNumStr ? parseInt(pNumStr, 10) : pageNum;
+    if (isNaN(pNum) || pNum < 1) {
+      statusEl.textContent = 'Page number must be 1 or more.';
+      statusEl.style.color = '#c5221f';
+      return;
+    }
+    if (!rawGroups[studentId]) rawGroups[studentId] = [];
+    rawGroups[studentId].push({ pdfPage: pageNum, pageNum: pNum });
+    rebuildPageGroups();
+    refreshSummaryTable();
+    removeUnassignedPage(pageNum);
+  }
+
+  function disregardUnassignedPage(pageNum) {
+    removeUnassignedPage(pageNum);
+  }
+
+  function removeUnassignedPage(pageNum) {
+    unassignedPages = unassignedPages.filter(function(p) { return p !== pageNum; });
+    var row = document.getElementById('urow_' + pageNum);
+    if (row) row.parentNode.removeChild(row);
+    if (!unassignedPages.length) document.getElementById('unassignedPages').style.display = 'none';
+  }
+
+  // ── QR mode: Split ────────────────────────────────────────────────────────
+  function runSplit() {
+    if (!detectionDone) return showStatus('s2status', 'error', 'Run scan first.');
+    var studentsToProcess = studentList
+      .filter(function(s) { return pageGroups[s.id] && pageGroups[s.id].length > 0; })
+      .map(function(s)    { return { name: s.name, id: s.id, pages: pageGroups[s.id] }; });
+
+    if (!studentsToProcess.length) {
+      return showStatus('s2status', 'error', 'No students have detected pages. Check QR codes.');
+    }
+    document.getElementById('qrRunBtn').disabled = true;
+    startSplit(studentsToProcess);
+  }
+
+  // ── Manual mode: pages-per-student ───────────────────────────────────────
+  function onPagesChanged() {
+    var pps = parseInt(document.getElementById('pagesPerStudent').value, 10);
+    if (!configConfirmed || !studentList.length || isNaN(pps) || pps < 1) {
+      document.getElementById('manualPreview').style.display = 'none';
+      document.getElementById('ppsHint').textContent = 'Enter a number to preview below.';
+      document.getElementById('manualRunBtn').disabled = true;
+      document.getElementById('pageCheck').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('ppsHint').textContent =
+      studentList.length + ' students × ' + pps + ' pages = ' + (studentList.length * pps) + ' pages total';
+
+    var tbody = document.getElementById('manualTableBody');
+    tbody.innerHTML = '';
+    studentList.forEach(function(s, i) {
+      var start = i * pps + 1;
+      var end   = (i + 1) * pps;
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><input type="checkbox" class="manualCheck" data-index="' + i + '" checked ' +
+        'onchange="onManualCheckChange()"></td>' +
+        '<td style="color:#9aa0a6">' + (i + 1) + '</td>' +
+        '<td>' + esc(s.name) + '</td>' +
+        '<td><span class="page-badge" id="pageBadge_' + i + '">pp. ' + start + '–' + end + '</span></td>';
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('manualPreview').style.display = 'block';
+    updateManualSummary();
+  }
+
+  function onManualCheckChange() {
+    var pps    = parseInt(document.getElementById('pagesPerStudent').value, 10);
+    var checks = document.querySelectorAll('.manualCheck');
+    var pageNum = 1;
+    checks.forEach(function(cb, i) {
+      var badge = document.getElementById('pageBadge_' + i);
+      if (cb.checked) {
+        badge.textContent = 'pp. ' + pageNum + '–' + (pageNum + pps - 1);
+        badge.style.opacity = '1';
+        pageNum += pps;   // only advance for present students
+      } else {
+        badge.textContent = 'absent';
+        badge.style.opacity = '0.4';
+        // absent students have no pages in the PDF — do not advance counter
+      }
+    });
+    updateManualSummary();
+  }
+
+  function updateManualSummary() {
+    var pps      = parseInt(document.getElementById('pagesPerStudent').value, 10);
+    var checks   = document.querySelectorAll('.manualCheck');
+    var included = 0;
+    checks.forEach(function(cb) { if (cb.checked) included++; });
+
+    // Expected pages = only present (checked) students × pages each.
+    // Absent students have no pages in the scanned PDF.
+    var expectedPages = included * pps;
+    var pageCheckEl   = document.getElementById('pageCheck');
+
+    document.getElementById('manualSummary').textContent =
+      included + ' of ' + studentList.length + ' students included.';
+
+    // ── Page count sanity check ──────────────────────────────────────────
+    if (totalPdfPages !== null && !isNaN(pps) && pps > 0) {
+      pageCheckEl.style.display = 'block';
+
+      if (totalPdfPages === expectedPages) {
+        pageCheckEl.className = 'page-check ok';
+        pageCheckEl.innerHTML =
+          '<strong>✓ Page count matches</strong>' +
+          'PDF has ' + totalPdfPages + ' pages — matches ' +
+          included + ' present student(s) × ' + pps + ' page(s) each.';
+
+      } else {
+        // Mismatch — work out a helpful hint
+        pageCheckEl.className = 'page-check warn';
+        var diff = totalPdfPages - expectedPages;  // positive = extra pages, negative = missing
+        var hint = '';
+
+        if (diff > 0 && diff % pps === 0) {
+          hint = ' It looks like <strong>' + (diff / pps) +
+            ' extra student(s)</strong> may be missing from the sheet, or extra pages crept in during scanning.';
+        } else if (diff < 0 && (-diff) % pps === 0) {
+          hint = ' It looks like <strong>' + ((-diff) / pps) +
+            ' student(s)</strong> may be in the sheet but their pages aren\'t in the PDF.';
+        } else if (diff > 0) {
+          hint = ' There are <strong>' + diff + ' extra page(s)</strong> — a stray page may have gotten into the pile during scanning.';
+        } else {
+          hint = ' There are <strong>' + (-diff) + ' fewer page(s)</strong> than expected — a page may be missing from the scan.';
+        }
+
+        pageCheckEl.innerHTML =
+          '<strong>⚠ Page count mismatch</strong>' +
+          'PDF has <strong>' + totalPdfPages + '</strong> pages, but ' +
+          included + ' present student(s) × ' + pps + ' page(s) = <strong>' + expectedPages + '</strong>.' +
+          hint + ' Please recheck the student list and the scanned PDF before continuing.';
+      }
+    } else {
+      pageCheckEl.style.display = 'none';
+    }
+
+    // Enable split even on mismatch — teacher may choose to proceed anyway
+    document.getElementById('manualRunBtn').disabled = (included === 0) || !fileConfirmed;
+  }
+
+  function runManualSplit() {
+    var pps    = parseInt(document.getElementById('pagesPerStudent').value, 10);
+    var checks = document.querySelectorAll('.manualCheck');
+
+    var studentsToProcess = [];
+    var pageNum = 1;
+    checks.forEach(function(cb, i) {
+      if (cb.checked) {
+        // Present — assign the next block of pages and advance counter
+        var pages = [];
+        for (var p = pageNum; p < pageNum + pps; p++) pages.push(p);
+        studentsToProcess.push({ name: studentList[i].name, id: studentList[i].id, pages: pages });
+        pageNum += pps;
+      }
+      // Absent (unchecked) — do NOT advance pageNum.
+      // Their sheets weren't scanned so there are no pages for them in the PDF.
+    });
+
+    if (!studentsToProcess.length) {
+      return showStatus('s2status', 'error', 'No students selected.');
+    }
+    document.getElementById('manualRunBtn').disabled = true;
+    startSplit(studentsToProcess, true);
+  }
+
+  // ── Shared split engine ───────────────────────────────────────────────────
+  // Both QR mode and manual mode call startSplit() with the same shape:
+  // studentsToProcess = [{name, id, pages: [1-based page numbers]}]
+
+  function startSplit(studentsToProcess, isManual) {
+    document.getElementById('splitProgress').style.display = 'block';
+    document.getElementById('results').innerHTML = '';
+    showStatus('s2status', 'info', 'Loading pdf-lib…');
+    setSplitProgress(3, 'Loading pdf-lib…');
+
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js', function() {
+      if (!window.PDFLib) {
+        showStatus('s2status', 'error', 'pdf-lib failed to load.');
+        resetRunButtons();
+        return;
+      }
+
+      if (masterPdf) {
+        doSplit(studentsToProcess, isManual);
+      } else {
+        setSplitProgress(5, 'Downloading PDF… 0%');
+        fetchPdfInChunks(pdfFileId, function(pct) {
+          setSplitProgress(5 + Math.round(pct * 0.1), 'Downloading PDF… ' + pct + '%');
+        })
+        .then(function(bytes) {
+          return PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+        })
+        .then(function(doc) {
+          masterPdf = doc;
+          doSplit(studentsToProcess, isManual);
+        })
+        .catch(function(err) {
+          showStatus('s2status', 'error', 'Could not load PDF: ' + err.message);
+          resetRunButtons();
+        });
+      }
+    }, function(err) {
+      showStatus('s2status', 'error', 'Could not load pdf-lib: ' + err);
+      resetRunButtons();
+    });
+  }
+
+  function doSplit(studentsToProcess, isManual) {
+    splitStudentDocs = [];
+    var failedUploads = [];
+
+    setSplitProgress(10, 'Splitting ' + studentsToProcess.length + ' students…');
+    processNextStudent(studentsToProcess, 0, failedUploads)
+      .then(function() {
+        setSplitProgress(100, 'Done!');
+
+        if (failedUploads.length > 0) {
+          showStatus('s2status', 'warn',
+            failedUploads.length + ' upload(s) failed. Click Retry to try again.');
+          showRetryButton(failedUploads, isManual);
+        } else {
+          showStatus('s2status', 'success', '✓ All done — links written to your sheet.');
+        }
+
+        // Run outcome detection if any student has outcome data and teacher hasn't skipped
+        var skipOutcomes = document.getElementById('skipOutcomesQR') &&
+                           document.getElementById('skipOutcomesQR').checked;
+        var hasOutcomes  = !skipOutcomes &&
+                           splitStudentDocs.some(function(d) { return outcomeMap[d.id]; });
+        if (!isManual && hasOutcomes) {
+          runOutcomeDetection();
+        } else if (!isManual && sheetConfig.scoreCol && splitStudentDocs.length > 0) {
+          buildScoreStep();
+        }
+      })
+      .catch(function(err) {
+        showStatus('s2status', 'error', 'Unexpected error: ' + err.message);
+        resetRunButtons();
+      });
+  }
+
+  function showRetryButton(failedUploads, isManual) {
+    var existing = document.getElementById('retryBtn');
+    if (existing) existing.parentNode.removeChild(existing);
+
+    var btn = document.createElement('button');
+    btn.id        = 'retryBtn';
+    btn.className = 'btn btn-outline btn-block';
+    btn.style.marginTop = '8px';
+    btn.textContent = '↺ Retry ' + failedUploads.length + ' failed upload(s)';
+    btn.onclick = function() {
+      btn.disabled = true;
+      btn.textContent = 'Retrying…';
+      showStatus('s2status', 'info', 'Retrying failed uploads…');
+      var retryList = [];
+      // Build a pseudo-student list from the stored bytes — no re-splitting needed
+      failedUploads.forEach(function(f) { retryList.push(f); });
+      retryUploads(retryList, 0, isManual, btn);
+    };
+    document.getElementById('s2body').appendChild(btn);
+  }
+
+  function retryUploads(list, index, isManual, retryBtn) {
+    if (index >= list.length) {
+      // Check if any still failed
+      var stillFailed = list.filter(function(f) { return f.failed; });
+      if (stillFailed.length > 0) {
+        showStatus('s2status', 'warn',
+          stillFailed.length + ' still failed. You can retry again.');
+        retryBtn.disabled = false;
+        retryBtn.textContent = '↺ Retry ' + stillFailed.length + ' failed upload(s)';
+        // Update the list for next retry
+        retryBtn.onclick = function() {
+          retryBtn.disabled = true;
+          retryBtn.textContent = 'Retrying…';
+          showStatus('s2status', 'info', 'Retrying…');
+          retryUploads(stillFailed, 0, isManual, retryBtn);
+        };
+      } else {
+        retryBtn.parentNode.removeChild(retryBtn);
+        showStatus('s2status', 'success', '✓ All done — links written to your sheet.');
+        if (!isManual && sheetConfig.scoreCol && splitStudentDocs.length > 0) {
+          buildScoreStep();
+        }
+      }
+      return;
+    }
+
+    var entry = list[index];
+    entry.failed = false;  // reset before attempt
+
+    // Update the existing result row to show retrying
+    updateResult(entry.name, 'retrying');
+
+    new Promise(function(resolve, reject) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function(e) { reject(new Error(e.message)); })
+        .uploadAndLink(uint8ToBase64(entry.pdfBytes), entry.name, pdfFileId, sheetConfig);
+    })
+    .then(function(result) {
+      if (result.success) {
+        updateResult(entry.name, 'ok');
+        if (sheetConfig.scoreCol) {
+          // Add to score docs if not already present
+          var already = splitStudentDocs.some(function(d) { return d.name === entry.name; });
+          if (!already) splitStudentDocs.push({ name: entry.name, id: entry.id, pdfBytes: entry.pdfBytes });
+        }
+      } else {
+        entry.failed = true;
+        updateResult(entry.name, 'fail', result.error);
+      }
+      retryUploads(list, index + 1, isManual, retryBtn);
+    })
+    .catch(function(err) {
+      entry.failed = true;
+      updateResult(entry.name, 'fail', err.message);
+      retryUploads(list, index + 1, isManual, retryBtn);
+    });
+  }
+
+  function processNextStudent(students, index, failedUploads) {
+    if (index >= students.length) return Promise.resolve();
+
+    var student = students[index];
+    var pct = 10 + Math.round((85 / students.length) * index);
+    setSplitProgress(pct, 'Uploading: ' + student.name + ' (' + (index + 1) + '/' + students.length + ')…');
+
+    var indices = student.pages.map(function(p) { return p - 1; });
+    var savedBytes = null;
+
+    return PDFLib.PDFDocument.create()
+      .then(function(studentDoc) {
+        return studentDoc.copyPages(masterPdf, indices)
+          .then(function(copiedPages) {
+            copiedPages.forEach(function(p) { studentDoc.addPage(p); });
+            return studentDoc.save();
+          });
+      })
+      .then(function(pdfBytes) {
+        savedBytes = pdfBytes;
+        return new Promise(function(resolve, reject) {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(function(e) { reject(new Error(e.message)); })
+            .uploadAndLink(uint8ToBase64(pdfBytes), student.name, pdfFileId, sheetConfig);
+        });
+      })
+      .then(function(result) {
+        if (result.success) {
+          addResult('ok', student.name);
+          if (sheetConfig.scoreCol) {
+            splitStudentDocs.push({ name: student.name, id: student.id, pdfBytes: savedBytes });
+          }
+        } else {
+          addResult('fail', student.name, result.error);
+          failedUploads.push({ name: student.name, id: student.id, pdfBytes: savedBytes });
+        }
+        return processNextStudent(students, index + 1, failedUploads);
+      })
+      .catch(function(err) {
+        addResult('fail', student.name, err.message);
+        failedUploads.push({ name: student.name, id: student.id, pdfBytes: savedBytes });
+        return processNextStudent(students, index + 1, failedUploads);
+      });
+  }
+
+  // ── Outcome detection ─────────────────────────────────────────────────────
+  // DARKNESS_THRESHOLD: 0-255 average darkness of pixels in the [O] region.
+  // A filled-in circle will read darker than the printed empty [O].
+  // 80 works well for most pen types — adjust if needed.
+  var DARKNESS_THRESHOLD = 80;
+
+  function runOutcomeDetection() {
+    showStatus('s2status', 'info', 'Detecting filled outcomes…');
+
+    // Ensure pdf.js is loaded (QR scan already loaded it)
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', function() {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      processNextOutcomeStudent(0, []);
+    }, function() {
+      showStatus('s2status', 'warn', 'Could not load pdf.js for outcome detection. Scores still saved.');
+      if (sheetConfig.scoreCol && splitStudentDocs.length > 0) buildScoreStep();
+    });
+  }
+
+  function processNextOutcomeStudent(index, allResults) {
+    if (index >= splitStudentDocs.length) {
+      // All students processed — send to server
+      if (allResults.length > 0) {
+        showStatus('s2status', 'info', 'Writing outcomes to sheet…');
+        google.script.run
+          .withSuccessHandler(function(res) {
+            var msg = '✓ ' + res.written + ' outcome(s) written to sheet.';
+            if (res.errors && res.errors.length) {
+              msg += ' ' + res.errors.length + ' outcome(s) could not be matched — ' +
+                     'check that the text after [O] closely matches the outcomes sheet.';
+            }
+            showStatus('s2status', res.errors && res.errors.length ? 'warn' : 'success', msg);
+            if (sheetConfig.scoreCol && splitStudentDocs.length > 0) buildScoreStep();
+          })
+          .withFailureHandler(function(e) {
+            showStatus('s2status', 'warn', 'Outcomes detected but could not write to sheet: ' + e.message);
+            if (sheetConfig.scoreCol && splitStudentDocs.length > 0) buildScoreStep();
+          })
+          .writeOutcomesToSheet(allResults);
+      } else {
+        if (sheetConfig.scoreCol && splitStudentDocs.length > 0) buildScoreStep();
+      }
+      return;
+    }
+
+    var entry   = splitStudentDocs[index];
+    var oData   = outcomeMap[entry.id];
+    if (!oData) {
+      // No outcome data for this student — skip
+      processNextOutcomeStudent(index + 1, allResults);
+      return;
+    }
+
+    showStatus('s2status', 'info',
+      'Detecting outcomes: ' + entry.name + ' (' + (index + 1) + '/' + splitStudentDocs.length + ')…');
+
+    // Load this student's split PDF
+    pdfjsLib.getDocument({ data: entry.pdfBytes.slice() }).promise
+      .then(function(pdf) {
+        // Process each outcome — may span different pages
+        return detectOutcomesForStudent(pdf, entry, oData);
+      })
+      .then(function(outcomeResults) {
+        if (outcomeResults.length > 0) {
+          allResults.push({
+            studentName: entry.name,
+            sheetName:   oData.sheetName,
+            outcomes:    outcomeResults,
+          });
+        }
+        processNextOutcomeStudent(index + 1, allResults);
+      })
+      .catch(function() {
+        // Detection failed for this student — skip and continue
+        processNextOutcomeStudent(index + 1, allResults);
+      });
+  }
+
+  function detectOutcomesForStudent(pdf, entry, oData) {
+    var results = [];
+    var chain   = Promise.resolve();
+
+    oData.outcomes.forEach(function(outcome) {
+      chain = chain.then(function() {
+        var pageNum = outcome.page;
+        if (pageNum > pdf.numPages) {
+          results.push({ text: outcome.text, achieved: false });
+          return;
+        }
+        return pdf.getPage(pageNum).then(function(pg) {
+          var RENDER_SCALE = 2.0;
+          var vp = pg.getViewport({ scale: RENDER_SCALE });
+          var canvas = document.createElement('canvas');
+          canvas.width  = vp.width;
+          canvas.height = vp.height;
+          return pg.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
+            .then(function() {
+              // The [O] marker sits at yPct from the top of the page (in PDF coords,
+              // top = 1.0). Convert to canvas pixel Y (canvas origin = top-left).
+              // Sample a small region around the [O] character.
+              var yCanvas  = Math.round(outcome.yPct * vp.height);
+              var sampleH  = Math.round(0.03 * vp.height);  // ~3% of page height
+              var sampleW  = Math.round(0.06 * vp.width);   // ~6% of page width
+              var sampleX  = 0;  // [O] markers are typically in left margin
+              var sampleY  = Math.max(0, yCanvas - Math.round(sampleH / 2));
+
+              // Clamp to canvas bounds
+              sampleW = Math.min(sampleW, vp.width  - sampleX);
+              sampleH = Math.min(sampleH, vp.height - sampleY);
+
+              if (sampleW <= 0 || sampleH <= 0) {
+                results.push({ text: outcome.text, achieved: false });
+                return;
+              }
+
+              var ctx     = canvas.getContext('2d');
+              var imgData = ctx.getImageData(sampleX, sampleY, sampleW, sampleH);
+              var pixels  = imgData.data;
+              var totalDarkness = 0;
+              var count   = pixels.length / 4;
+
+              for (var p = 0; p < pixels.length; p += 4) {
+                // Convert RGB to perceived brightness (0=black, 255=white)
+                var brightness = (pixels[p] * 0.299 + pixels[p+1] * 0.587 + pixels[p+2] * 0.114);
+                totalDarkness += (255 - brightness);  // invert so dark = high value
+              }
+
+              var avgDarkness = totalDarkness / count;
+              results.push({ text: outcome.text, achieved: avgDarkness > DARKNESS_THRESHOLD });
+            });
+        });
+      });
+    });
+
+    return chain.then(function() { return results; });
+  }
+
+  function resetRunButtons() {
+    document.getElementById('qrRunBtn').disabled = false;
+    document.getElementById('manualRunBtn').disabled = false;
+  }
+
+  // ── Step 4: Score entry ───────────────────────────────────────────────────
+  var STAMP_H          = 58;
+  var SCORE_RENDER_SCALE = 2.0;
+
+  // Crop region in CANVAS pixels (at SCORE_RENDER_SCALE).
+  // These are the values used when snipping the score thumbnail.
+  // Adjust by running the calibration tool and feeding back the coordinates.
+  var CROP_X_FRAC  = 0.335;
+  var CROP_W_FRAC  = 0.251;
+  var CROP_Y_PX    = 147;
+  var CROP_H_PX    = 94;
+
+  // ── Calibration tool ─────────────────────────────────────────────────────
+  var calibDragging  = false;
+  var calibResizing  = false;
+  var calibDragStart = null;
+  var calibBoxRect   = { x: 0, y: 0, w: 100, h: 40 };  // in canvas CSS pixels
+  var calibCanvasNaturalW = 1;
+  var calibCanvasNaturalH = 1;
+
+  function startCalibration() {
+    if (!splitStudentDocs.length) return;
+    document.getElementById('calibBtn').disabled = true;
+    document.getElementById('calibBtn').textContent = 'Rendering…';
+
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', function() {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+      var entry = splitStudentDocs[0];
+      pdfjsLib.getDocument({ data: entry.pdfBytes.slice() }).promise.then(function(pdf) {
+        pdf.getPage(1).then(function(pg) {
+          var vp = pg.getViewport({ scale: SCORE_RENDER_SCALE });
+          var canvas = document.getElementById('calibCanvas');
+          canvas.width  = vp.width;
+          canvas.height = vp.height;
+          calibCanvasNaturalW = vp.width;
+          calibCanvasNaturalH = vp.height;
+
+          pg.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function() {
+            // Initialise drag box over the header region
+            var cssW = canvas.offsetWidth;
+            var scaleF = cssW / vp.width;
+            var hdrH = Math.round(STAMP_H * SCORE_RENDER_SCALE * scaleF);
+            calibBoxRect = { x: Math.round(cssW * 0.25), y: 0,
+                             w: Math.round(cssW * 0.45), h: hdrH };
+            updateCalibBox();
+            setupCalibDrag(canvas);
+            document.getElementById('calibBtn').textContent = 'Re-render';
+            document.getElementById('calibBtn').disabled = false;
+          });
+        });
+      });
+    }, function() {
+      document.getElementById('calibBtn').textContent = 'pdf.js failed to load';
+    });
+  }
+
+  function updateCalibBox() {
+    var box    = document.getElementById('calibBox');
+    var coords = document.getElementById('calibCoords');
+    box.style.display  = 'block';
+    box.style.left     = calibBoxRect.x + 'px';
+    box.style.top      = calibBoxRect.y + 'px';
+    box.style.width    = calibBoxRect.w + 'px';
+    box.style.height   = calibBoxRect.h + 'px';
+    coords.style.display = 'block';
+
+    // Convert CSS pixel box back to natural canvas pixel fractions
+    var canvas = document.getElementById('calibCanvas');
+    var cssW   = canvas.offsetWidth;
+    var cssH   = canvas.offsetHeight;
+    var xFrac  = (calibBoxRect.x / cssW).toFixed(3);
+    var wFrac  = (calibBoxRect.w / cssW).toFixed(3);
+    var yPx    = Math.round(calibBoxRect.y / cssH * calibCanvasNaturalH);
+    var hPx    = Math.round(calibBoxRect.h / cssH * calibCanvasNaturalH);
+
+    coords.innerHTML =
+      '<strong>Send these values to update the crop:</strong><br>' +
+      'CROP_X_FRAC = ' + xFrac + '<br>' +
+      'CROP_W_FRAC = ' + wFrac + '<br>' +
+      'CROP_Y_PX   = ' + yPx   + '<br>' +
+      'CROP_H_PX   = ' + hPx;
+  }
+
+  function setupCalibDrag(canvas) {
+    var box    = document.getElementById('calibBox');
+    var handle = document.getElementById('calibResizeHandle');
+
+    box.onmousedown = function(e) {
+      if (e.target === handle) return;
+      calibDragging  = true;
+      calibDragStart = { mx: e.clientX, my: e.clientY,
+                         bx: calibBoxRect.x, by: calibBoxRect.y };
+      e.preventDefault();
+    };
+    handle.onmousedown = function(e) {
+      calibResizing  = true;
+      calibDragStart = { mx: e.clientX, my: e.clientY,
+                         bw: calibBoxRect.w, bh: calibBoxRect.h };
+      e.preventDefault();
+    };
+    document.onmousemove = function(e) {
+      if (!calibDragging && !calibResizing) return;
+      var dx = e.clientX - calibDragStart.mx;
+      var dy = e.clientY - calibDragStart.my;
+      var cssW = canvas.offsetWidth;
+      var cssH = canvas.offsetHeight;
+      if (calibDragging) {
+        calibBoxRect.x = Math.max(0, Math.min(cssW - calibBoxRect.w, calibDragStart.bx + dx));
+        calibBoxRect.y = Math.max(0, Math.min(cssH - calibBoxRect.h, calibDragStart.by + dy));
+      } else {
+        calibBoxRect.w = Math.max(20, Math.min(cssW - calibBoxRect.x, calibDragStart.bw + dx));
+        calibBoxRect.h = Math.max(10, Math.min(cssH - calibBoxRect.y, calibDragStart.bh + dy));
+      }
+      updateCalibBox();
+    };
+    document.onmouseup = function() { calibDragging = false; calibResizing = false; };
+  }
+
+  function buildScoreStep() {
+    document.getElementById('scoreStep').style.display = 'block';
+    var container = document.getElementById('scoreRows');
+    container.innerHTML = '<div style="font-size:12px;color:#5f6368;">Rendering score boxes…</div>';
+
+    // Load pdf.js if not already present (QR mode already loaded it; manual mode may not have)
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', function() {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      container.innerHTML = '';
+      renderNextScoreRow(0);
+    }, function() {
+      container.innerHTML = '<div style="color:#c5221f;font-size:12px;">Could not load pdf.js for score preview.</div>';
+      document.getElementById('writeScoresBtn').disabled = false; // still allow manual entry
+      buildScoreRowsFallback();
+    });
+  }
+
+  function renderNextScoreRow(index) {
+    if (index >= splitStudentDocs.length) {
+      document.getElementById('writeScoresBtn').disabled = false;
+      return;
+    }
+    var entry = splitStudentDocs[index];
+    pdfjsLib.getDocument({ data: entry.pdfBytes.slice() }).promise.then(function(pdf) {
+      pdf.getPage(1).then(function(pg) {
+        var vp = pg.getViewport({ scale: SCORE_RENDER_SCALE });
+
+        var offscreen = document.createElement('canvas');
+        offscreen.width  = vp.width;
+        offscreen.height = vp.height;
+        pg.render({ canvasContext: offscreen.getContext('2d'), viewport: vp }).promise.then(function() {
+
+          // Crop just the score section — the centre 40% of the header width.
+          // The score boxes are always centred in the left column which occupies
+          // roughly the left 80% of the page (QR takes the right ~20%).
+          // Taking the middle 40% of the full width reliably frames the score boxes
+          // regardless of page width, without including the QR or left margin clutter.
+          var headerH = Math.round(STAMP_H * SCORE_RENDER_SCALE);
+          var fullW   = vp.width;
+          var cropY   = (CROP_Y_PX !== null) ? CROP_Y_PX : 0;
+          var cropH   = (CROP_H_PX !== null) ? CROP_H_PX : headerH;
+          var cropW   = Math.round(fullW * CROP_W_FRAC);
+          var cropX   = Math.round(fullW * CROP_X_FRAC);
+
+          var cropCanvas = document.createElement('canvas');
+          cropCanvas.width  = cropW;
+          cropCanvas.height = cropH;
+          cropCanvas.getContext('2d').drawImage(
+            offscreen,
+            cropX, cropY, cropW, cropH,   // source region
+            0,     0,     cropW, cropH    // dest
+          );
+
+          appendScoreRow(index, entry.name, cropCanvas);
+          renderNextScoreRow(index + 1);
+        });
+      });
+    }).catch(function() {
+      appendScoreRow(index, entry.name, null);
+      renderNextScoreRow(index + 1);
+    });
+  }
+
+  function appendScoreRow(index, name, cropCanvas) {
+    var row = document.createElement('div');
+    row.className = 'score-row';
+
+    // Canvas on top (if available), then name + input below it
+    var right = document.createElement('div');
+    right.className = 'score-right';
+    right.innerHTML =
+      '<div class="score-name">' + esc(name) + '</div>' +
+      '<input type="number" class="score-input" id="scoreInput_' + index + '"' +
+      ' placeholder="—" min="0" max="9999">' +
+      '<span class="score-written" id="scoreWritten_' + index + '">✓ saved</span>';
+
+    if (cropCanvas) {
+      // Make canvas fill the row width for easy reading
+      cropCanvas.style.width  = '100%';
+      cropCanvas.style.height = 'auto';
+      row.style.flexDirection = 'column';
+      row.appendChild(cropCanvas);
+    }
+    row.appendChild(right);
+    document.getElementById('scoreRows').appendChild(row);
+  }
+
+  function buildScoreRowsFallback() {
+    splitStudentDocs.forEach(function(entry, index) {
+      appendScoreRow(index, entry.name, null);
+    });
+  }
+
+  function writeScores() {
+    var toWrite = [];
+    splitStudentDocs.forEach(function(entry, index) {
+      var val = document.getElementById('scoreInput_' + index).value.trim();
+      if (val !== '') toWrite.push({ name: entry.name, score: val });
+    });
+
+    if (!toWrite.length) {
+      return showStatus('s3status', 'error', 'No scores entered.');
+    }
+
+    document.getElementById('writeScoresBtn').disabled = true;
+    showStatus('s3status', 'info', 'Writing ' + toWrite.length + ' score(s)…');
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        // Mark written rows with a tick
+        splitStudentDocs.forEach(function(entry, index) {
+          var val = document.getElementById('scoreInput_' + index).value.trim();
+          if (val !== '') document.getElementById('scoreWritten_' + index).style.display = 'inline';
+        });
+        showStatus('s3status', 'success', '✓ ' + result.written + ' score(s) written to sheet.');
+        document.getElementById('s3title').classList.add('confirmed');
+        document.getElementById('s3badge').textContent = '✓ ' + result.written + ' scores saved';
+        document.getElementById('s3badge').style.display = 'block';
+      })
+      .withFailureHandler(function(err) {
+        showStatus('s3status', 'error', 'Could not write scores: ' + err.message);
+        document.getElementById('writeScoresBtn').disabled = false;
+      })
+      .writeScoresToSheet(toWrite, sheetConfig);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function addResult(status, name, error) {
+    // status: 'ok' | 'fail'
+    var div = document.createElement('div');
+    div.id = 'result_' + name.replace(/\W/g, '_');
+    div.className = 'result-item ' + (status === 'ok' ? 'result-ok' : 'result-fail');
+    div.textContent = status === 'ok'
+      ? '✓ ' + name
+      : '✗ ' + name + (error ? ': ' + error : '');
+    document.getElementById('results').appendChild(div);
+  }
+
+  function updateResult(name, status, error) {
+    // status: 'ok' | 'fail' | 'retrying'
+    var id  = 'result_' + name.replace(/\W/g, '_');
+    var div = document.getElementById(id);
+    if (!div) { addResult(status === 'retrying' ? 'fail' : status, name, error); return; }
+    if (status === 'retrying') {
+      div.className = 'result-item';
+      div.style.color = '#5f6368';
+      div.textContent = '↺ Retrying: ' + name + '…';
+    } else if (status === 'ok') {
+      div.className = 'result-item result-ok';
+      div.style.color = '';
+      div.textContent = '✓ ' + name;
+    } else {
+      div.className = 'result-item result-fail';
+      div.style.color = '';
+      div.textContent = '✗ ' + name + (error ? ': ' + error : '');
+    }
+  }
+
+  function setSplitProgress(pct, label) {
+    document.getElementById('splitBar').style.width = pct + '%';
+    document.getElementById('splitLabel').textContent = label;
+  }
+
+  function base64ToBytes(base64) {
+    var binary = atob(base64);
+    var bytes  = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  /**
+   * Parse response from getPdfAsBase64 which can be either:
+   * - Plain base64 string (legacy/small files)
+   * - JSON string with {isUrl: true, url, size} (large files)
+   * Returns Uint8Array of PDF bytes.
+   */
+  function processPdfResponse(response, callback) {
+    try {
+      var parsed = JSON.parse(response);
+      if (parsed.isUrl) {
+        // Fetch from URL
+        fetch(parsed.url)
+          .then(function(r) { return r.arrayBuffer(); })
+          .then(function(buffer) { callback(new Uint8Array(buffer)); })
+          .catch(function(e) { throw new Error('Could not download PDF: ' + e.message); });
+        return;
+      }
+    } catch (e) {
+      // Not JSON — treat as base64
+    }
+    // Fallback: treat as base64
+    callback(base64ToBytes(response));
+  }
+
+  /**
+   * Async version of processPdfResponse for use in Promise chains.
+   */
+  function processPdfResponseAsync(response) {
+    return new Promise(function(resolve, reject) {
+      try {
+        var parsed = JSON.parse(response);
+        if (parsed.isUrl) {
+          // Fetch from URL
+          fetch(parsed.url)
+            .then(function(r) { return r.arrayBuffer(); })
+            .then(function(buffer) { resolve(new Uint8Array(buffer)); })
+            .catch(function(e) { reject(new Error('Could not download PDF: ' + e.message)); });
+          return;
+        }
+      } catch (e) {
+        // Not JSON — treat as base64
+      }
+      // Fallback: treat as base64
+      resolve(base64ToBytes(response));
+    });
+  }
+
+  function uint8ToBase64(bytes) {
+    var binary = '';
+    var chunk  = 32768;
+    for (var i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  /**
+   * Downloads a Drive PDF via Apps Script, reassembles into a single Uint8Array,
+   * and resolves the returned Promise.
+   *
+   * Strategy based on file size (checked first with a cheap metadata call):
+   *   ≤ 10 MB  → single getPdfAsBase64 call (fastest — 2 round trips total)
+   *   > 10 MB  → chunked via getPdfChunk in 10 MB pieces (was 4 MB, halving round trips)
+   *
+   * onProgress(pct) is called with 0–100 during chunked downloads.
+   */
+  function fetchPdfInChunks(fileId, onProgress) {
+    var SMALL  = 10 * 1024 * 1024;  // files at or below this size fetch in one shot
+    var CHUNK  = 10 * 1024 * 1024;  // chunk size for large files
+
+    return new Promise(function(resolve, reject) {
+      google.script.run
+        .withSuccessHandler(function(totalSize) {
+
+          // ── Small file: single round trip ──────────────────────────────
+          if (totalSize <= SMALL) {
+            google.script.run
+              .withSuccessHandler(function(b64) { resolve(base64ToBytes(b64)); })
+              .withFailureHandler(function(e) {
+                reject(new Error(e.message || 'Could not fetch PDF'));
+              })
+              .getPdfAsBase64(fileId);
+            return;
+          }
+
+          // ── Large file: chunked download ───────────────────────────────
+          var chunks = [];
+          var offset = 0;
+
+          function nextChunk() {
+            if (offset >= totalSize) {
+              var out = new Uint8Array(totalSize);
+              var pos = 0;
+              for (var i = 0; i < chunks.length; i++) {
+                out.set(chunks[i], pos);
+                pos += chunks[i].length;
+              }
+              resolve(out);
+              return;
+            }
+            if (onProgress) onProgress(Math.round(offset / totalSize * 100));
+            var length = Math.min(CHUNK, totalSize - offset);
+            var chunkOffset = offset;
+            google.script.run
+              .withSuccessHandler(function(b64) {
+                chunks.push(base64ToBytes(b64));
+                offset += length;
+                nextChunk();
+              })
+              .withFailureHandler(function(e) {
+                reject(new Error(e.message || 'Chunk fetch failed at offset ' + chunkOffset));
+              })
+              .getPdfChunk(fileId, chunkOffset, length);
+          }
+
+          nextChunk();
+        })
+        .withFailureHandler(function(e) {
+          reject(new Error(e.message || 'Could not get file size'));
+        })
+        .getPdfFileSize(fileId);
+    });
+  }
+
+  function loadScript(src, onSuccess, onError) {
+    if (document.querySelector('script[src="' + src + '"]')) { onSuccess(); return; }
+    var s = document.createElement('script');
+    s.src = src; s.onload = onSuccess;
+    s.onerror = function() { if (onError) onError('Failed to load ' + src); };
+    document.head.appendChild(s);
+  }
+
+  function toggleStep(bodyId, chevId) {
+    var body = document.getElementById(bodyId);
+    var chev = document.getElementById(chevId);
+    var collapsed = body.classList.toggle('collapsed');
+    if (collapsed) chev.classList.remove('open'); else chev.classList.add('open');
+  }
+
+  function collapseStep(bodyId, chevId) {
+    document.getElementById(bodyId).classList.add('collapsed');
+    document.getElementById(chevId).classList.remove('open');
+  }
+
+  function showStatus(id, type, msg) {
+    var el = document.getElementById(id);
+    el.className = 'status ' + type; el.textContent = msg; el.style.display = 'block';
+  }
+
+  function hideStatus(id) {
+    document.getElementById(id).style.display = 'none';
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>

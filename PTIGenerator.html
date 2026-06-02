@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Google Sans', Arial, sans-serif;
+      font-size: 13px; color: #202124;
+      background: #f8f9fa;
+      height: 100vh; display: flex; flex-direction: column;
+    }
+    .header {
+      background: #1a73e8; color: white;
+      padding: 12px 16px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    }
+    .header h2 { font-size: 15px; font-weight: 500; }
+    .steps { display: flex; flex-direction: column; overflow-y: auto; flex: 1; }
+    .step { background: white; border-bottom: 1px solid #e8eaed; padding: 14px 16px; }
+    .step-header {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none;
+    }
+    .step-title {
+      font-weight: 600; font-size: 12px; color: #1a73e8;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .step-title.confirmed { color: #188038; }
+    .step-chevron { font-size: 11px; color: #9aa0a6; transition: transform 0.2s; }
+    .step-chevron.open { transform: rotate(180deg); }
+    .step-body { margin-top: 10px; }
+    .step-body.collapsed { display: none; }
+    .confirmed-badge { font-size: 11px; color: #188038; margin-top: 3px; display: none; }
+    label { display: block; font-size: 11px; color: #5f6368; margin-bottom: 3px; font-weight: 500; }
+    .field-hint { font-size: 10px; color: #9aa0a6; margin-top: 2px; line-height: 1.4; }
+    input[type="text"], input[type="number"], select {
+      width: 100%; border: 1px solid #dadce0; border-radius: 4px;
+      padding: 7px 10px; font-size: 13px; outline: none;
+      transition: border-color 0.15s; background: white;
+    }
+    input:focus, select:focus { border-color: #1a73e8; }
+    input.valid  { border-color: #188038; background: #f0faf3; }
+    input.invalid{ border-color: #d93025; background: #fdf3f2; }
+    .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .config-grid .full { grid-column: 1 / -1; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border: none; border-radius: 4px;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: #1a73e8; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #1557b0; }
+    .btn-success { background: #188038; color: white; }
+    .btn-success:hover:not(:disabled) { background: #0d6329; }
+    .btn-block { width: 100%; justify-content: center; margin-top: 8px; }
+    .file-row { display: flex; gap: 6px; align-items: flex-end; }
+    .file-row input { flex: 1; }
+    .info-box {
+      background: #e8f0fe; border-radius: 4px; padding: 8px 12px;
+      font-size: 12px; color: #1a73e8; margin-top: 8px; display: none; line-height: 1.5;
+    }
+    .status { font-size: 12px; padding: 6px 10px; border-radius: 4px; margin-top: 8px; display: none; }
+    .status.info    { background: #e8f0fe; color: #1a73e8; }
+    .status.success { background: #e6f4ea; color: #137333; }
+    .status.error   { background: #fce8e6; color: #c5221f; }
+    .status.warn    { background: #fff3cd; color: #856404; }
+    .preview-chip {
+      display: inline-flex; align-items: center; background: #e8f0fe; color: #1a73e8;
+      border-radius: 99px; padding: 3px 10px; font-size: 11px; font-weight: 500; margin-top: 4px;
+    }
+    hr { border: none; border-top: 1px solid #e8eaed; margin: 10px 0; }
+    /* Field mapping table */
+    .map-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+    .map-table th {
+      background: #f1f3f4; padding: 5px 8px; text-align: left;
+      font-weight: 600; font-size: 11px; color: #5f6368; border-bottom: 1px solid #e8eaed;
+    }
+    .map-table td { padding: 4px 6px; border-bottom: 1px solid #f1f3f4; vertical-align: middle; }
+    .map-table tr:last-child td { border-bottom: none; }
+    .map-table input { width: 56px; padding: 4px 6px; font-size: 12px; text-align: center; }
+    .placeholder-tag {
+      display: inline-block; background: #f1f3f4; color: #5f6368;
+      border-radius: 3px; padding: 1px 5px; font-family: monospace; font-size: 11px;
+    }
+    /* Progress + results */
+    .progress-wrap { display: none; margin-top: 8px; }
+    .progress-bar-bg { background: #e8eaed; border-radius: 99px; height: 6px; margin-bottom: 6px; }
+    .progress-bar { background: #1a73e8; height: 6px; border-radius: 99px; width: 0%; transition: width 0.3s; }
+    .results { display: flex; flex-direction: column; gap: 4px; margin-top: 8px;
+               max-height: 200px; overflow-y: auto; }
+    .result-item { font-size: 12px; padding: 5px 8px; border-radius: 4px; }
+    .result-ok   { background: #e6f4ea; color: #137333; }
+    .result-fail { background: #fce8e6; color: #c5221f; }
+    .run-summary {
+      background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 6px;
+      padding: 10px 12px; font-size: 12px; color: #5f6368; margin-bottom: 8px; display: none;
+    }
+    .run-summary strong { color: #202124; display: block; margin-bottom: 4px; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <span>📋</span>
+  <h2>PTI Document Generator</h2>
+</div>
+
+<div class="steps">
+
+  <!-- STEP 1: Template -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s0body','s0chev')">
+      <div>
+        <div class="step-title" id="s0title">Step 1 — Template</div>
+        <div class="confirmed-badge" id="s0badge"></div>
+      </div>
+      <span class="step-chevron open" id="s0chev">▼</span>
+    </div>
+    <div class="step-body" id="s0body">
+      <p style="font-size:12px;color:#5f6368;margin-bottom:8px;">
+        Paste the URL or file ID of your Google Doc template.
+        Make sure it contains placeholders like <span class="placeholder-tag">{{Name}}</span>,
+        <span class="placeholder-tag">{{SpellingScore}}</span> etc. in the relevant cells.
+      </p>
+      <label>Google Doc Template URL or ID</label>
+      <div class="file-row">
+        <input type="text" id="templateInput" placeholder="Paste URL or file ID…">
+        <button class="btn btn-primary" style="flex-shrink:0;padding:7px 12px;" onclick="loadTemplate()">Load</button>
+      </div>
+      <div class="info-box" id="templateInfo"></div>
+      <div class="status" id="s0status"></div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Sheet config -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s1body','s1chev')">
+      <div>
+        <div class="step-title" id="s1title">Step 2 — Student Data</div>
+        <div class="confirmed-badge" id="s1badge"></div>
+      </div>
+      <span class="step-chevron open" id="s1chev">▼</span>
+    </div>
+    <div class="step-body" id="s1body">
+      <div class="config-grid">
+        <div class="full">
+          <label>Sheet Tab</label>
+          <select id="sheetSelect" onchange="onSheetConfigChange()">
+            <option value="">Loading…</option>
+          </select>
+        </div>
+        <div>
+          <label>Student Name Column</label>
+          <input type="text" id="nameCol" maxlength="3" placeholder="e.g. B"
+                 oninput="this.value=this.value.toUpperCase();onSheetConfigChange()">
+        </div>
+        <div>
+          <label>First Data Row</label>
+          <input type="number" id="dataStartRow" min="1" value="2" oninput="onSheetConfigChange()">
+        </div>
+      </div>
+      <div id="sheetPreview" style="display:none;margin-top:8px;">
+        <span class="preview-chip" id="sheetChip">—</span>
+      </div>
+      <div class="status" id="s1status"></div>
+      <button class="btn btn-primary btn-block" id="loadStudentsBtn"
+              onclick="loadStudents()" disabled>Load Students</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: Column mapping -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s2body','s2chev')">
+      <div>
+        <div class="step-title" id="s2title">Step 3 — Map Score Columns</div>
+        <div class="confirmed-badge" id="s2badge"></div>
+      </div>
+      <span class="step-chevron open" id="s2chev">▼</span>
+    </div>
+    <div class="step-body" id="s2body">
+      <p style="font-size:12px;color:#5f6368;margin-bottom:10px;">
+        Enter the column letter for each placeholder. Leave blank to skip.
+        Each group can pull from a different sheet tab.
+        Use the short placeholder names below in your Google Doc template —
+        they're designed to fit in narrow table cells without being split across lines.
+      </p>
+
+      <!-- Section A: Spelling data sheet -->
+      <div style="background:#f8f9fa;border:1px solid #e8eaed;border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:600;color:#1a73e8;text-transform:uppercase;
+                    letter-spacing:0.4px;margin-bottom:8px;">Spelling &amp; Reading Data</div>
+        <div style="display:grid;grid-template-columns:1fr 80px 80px;gap:8px;margin-bottom:8px;">
+          <div>
+            <label>Sheet Tab</label>
+            <select id="spellingSheet" onchange="onMappingChange()">
+              <option value="">Loading…</option>
+            </select>
+          </div>
+          <div>
+            <label>Name Column</label>
+            <input type="text" id="spellingNameCol" maxlength="3" placeholder="e.g. A"
+                   style="width:100%;" oninput="this.value=this.value.toUpperCase()">
+          </div>
+          <div>
+            <label>First Data Row</label>
+            <input type="number" id="spellingStartRow" min="1" value="2"
+                   style="width:100%;">
+          </div>
+        </div>
+        <table class="map-table">
+          <thead>
+            <tr><th>Placeholder</th><th>Description</th><th>Col</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="placeholder-tag">{{SS}}</span></td>
+              <td>Spelling Score</td>
+              <td><input type="text" id="col_SpellingScore" maxlength="3"
+                         oninput="this.value=this.value.toUpperCase()"></td>
+            </tr>
+            <tr>
+              <td><span class="placeholder-tag">{{CA}}</span></td>
+              <td>Chronological Age</td>
+              <td><input type="text" id="col_ChronAge" maxlength="3"
+                         oninput="this.value=this.value.toUpperCase()"></td>
+            </tr>
+            <tr>
+              <td><span class="placeholder-tag">{{SA}}</span></td>
+              <td>Feb Spelling Age</td>
+              <td><input type="text" id="col_SpellingAge" maxlength="3"
+                         oninput="this.value=this.value.toUpperCase()"></td>
+            </tr>
+            <tr>
+              <td><span class="placeholder-tag">{{DIF}}</span></td>
+              <td>Difference</td>
+              <td><input type="text" id="col_Difference" maxlength="3"
+                         oninput="this.value=this.value.toUpperCase()"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section B: ORF / MAZE sheet -->
+      <div style="background:#f8f9fa;border:1px solid #e8eaed;border-radius:6px;padding:10px 12px;">
+        <div style="font-size:11px;font-weight:600;color:#1a73e8;text-transform:uppercase;
+                    letter-spacing:0.4px;margin-bottom:8px;">ORF &amp; MAZE Data</div>
+        <div style="display:grid;grid-template-columns:1fr 80px 80px;gap:8px;margin-bottom:8px;">
+          <div>
+            <label>Sheet Tab</label>
+            <select id="orfSheet" onchange="onMappingChange()">
+              <option value="">Loading…</option>
+            </select>
+          </div>
+          <div>
+            <label>Name Column</label>
+            <input type="text" id="orfNameCol" maxlength="3" placeholder="e.g. A"
+                   style="width:100%;" oninput="this.value=this.value.toUpperCase()">
+          </div>
+          <div>
+            <label>First Data Row</label>
+            <input type="number" id="orfStartRow" min="1" value="2"
+                   style="width:100%;">
+          </div>
+        </div>
+        <table class="map-table">
+          <thead>
+            <tr><th>Placeholder</th><th>Description</th><th>Col</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="placeholder-tag">{{ORFC}}</span></td>
+              <td>Reading ORF ✓</td>
+              <td><input type="text" id="col_ORFCorrect" maxlength="3"
+                         oninput="this.value=this.value.toUpperCase()"></td>
+            </tr>
+            <tr>
+              <td><span class="placeholder-tag">{{ORFE}}</span></td>
+              <td>Reading ORF ✗</td>
+              <td><input type="text" id="col_ORFError" maxlength="3"
+                         oninput="this.value=this.value.toUpperCase()"></td>
+            </tr>
+            <tr>
+              <td><span class="placeholder-tag">{{MAZEC}}</span></td>
+              <td>MAZE ✓</td>
+              <td><input type="text" id="col_MAZECorrect" maxlength="3"
+                         oninput="this.value=this.value.toUpperCase()"></td>
+            </tr>
+            <tr>
+              <td><span class="placeholder-tag">{{MAZEE}}</span></td>
+              <td>MAZE ✗</td>
+              <td><input type="text" id="col_MAZEError" maxlength="3"
+                         oninput="this.value=this.value.toUpperCase()"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="status" id="s2status"></div>
+      <button class="btn btn-primary btn-block" id="confirmMappingBtn"
+              onclick="confirmMapping()">Confirm Mapping</button>
+    </div>
+  </div>
+
+  <!-- STEP 4: Generate -->
+  <div class="step">
+    <div class="step-header" onclick="toggleStep('s3body','s3chev')">
+      <div>
+        <div class="step-title" id="s3title">Step 4 — Generate</div>
+      </div>
+      <span class="step-chevron open" id="s3chev">▼</span>
+    </div>
+    <div class="step-body" id="s3body">
+
+      <!-- Filename suffix -->
+      <div style="margin-bottom:10px;">
+        <label>Filename Suffix</label>
+        <input type="text" id="suffixInput" value="S1 PTI 2026"
+               placeholder="e.g. S1 PTI 2026" oninput="updateRunSummary()">
+        <div class="field-hint">Files will be named: Last First - [suffix]</div>
+      </div>
+
+      <!-- Meeting date/time -->
+      <div style="margin-bottom:10px;">
+        <label>Meeting Date / Time <span style="font-weight:400;color:#9aa0a6;">(fills <span class="placeholder-tag">{{DateTime}}</span>)</span></label>
+        <input type="text" id="dateTimeInput"
+               placeholder="e.g. Tuesday 24 March OR Thursday 26 March"
+               oninput="updateRunSummary()">
+      </div>
+
+      <div class="run-summary" id="runSummary"></div>
+
+      <button class="btn btn-success btn-block" id="generateBtn"
+              onclick="runGenerate()" disabled>
+        ▶ Generate PTI Documents
+      </button>
+
+      <!-- Diagnostic button — helps identify name matching issues -->
+      <button class="btn btn-outline btn-block" id="diagnoseBtn"
+              onclick="runDiagnosis()" disabled
+              style="margin-top:4px;font-size:12px;">
+        🔍 Diagnose Data Matching
+      </button>
+      <div class="status" id="diagnoseStatus"></div>
+
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+        <div style="font-size:12px;color:#5f6368;margin-top:2px;" id="progressLabel">Working…</div>
+      </div>
+
+      <div class="results" id="results"></div>
+      <div class="status" id="s3status"></div>
+    </div>
+  </div>
+
+</div><!-- end .steps -->
+
+<script>
+  var templateId      = null;
+  var students        = [];   // [{name, rowIndex}]
+  var mappingConfirmed = false;
+  var sheetConfig     = null;
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  window.addEventListener('load', function() {
+    setTimeout(function() { loadSheetNames(0); }, 400);
+  });
+
+  // ── Sheet tab loading ────────────────────────────────────────────────────────
+  function loadSheetNames(attempt) {
+    var MAX = 6;
+    var sel = document.getElementById('sheetSelect');
+    google.script.run
+      .withSuccessHandler(function(sheets) {
+        if (!sheets || !sheets.length) {
+          sel.innerHTML = '<option value="">No sheets found</option>';
+          return;
+        }
+        // Fetch active sheet name then populate all dropdowns
+        google.script.run
+          .withSuccessHandler(function(activeName) {
+            var selIds = ['sheetSelect', 'spellingSheet', 'orfSheet'];
+            selIds.forEach(function(id) {
+              var el = document.getElementById(id);
+              el.innerHTML = '';
+              sheets.forEach(function(name) {
+                var o = document.createElement('option');
+                o.value = o.textContent = name;
+                // Pre-select the active sheet if it matches, otherwise first sheet
+                if (activeName && name === activeName) o.selected = true;
+                el.appendChild(o);
+              });
+              // If nothing matched (activeName null), ensure first option selected
+              if (!activeName) el.selectedIndex = 0;
+            });
+            onSheetConfigChange();
+            onMappingChange();
+          })
+          .withFailureHandler(function() {
+            // Fall back to first sheet if active name lookup fails
+            var selIds = ['sheetSelect', 'spellingSheet', 'orfSheet'];
+            selIds.forEach(function(id) {
+              var el = document.getElementById(id);
+              el.innerHTML = '';
+              sheets.forEach(function(name, i) {
+                var o = document.createElement('option');
+                o.value = o.textContent = name;
+                if (i === 0) o.selected = true;
+                el.appendChild(o);
+              });
+            });
+            onSheetConfigChange();
+            onMappingChange();
+          })
+          .getActiveSheetName();
+      })
+      .withFailureHandler(function() {
+        if (attempt < MAX) setTimeout(function() { loadSheetNames(attempt + 1); }, 1000);
+        else sel.innerHTML = '<option value="">Could not load sheets</option>';
+      })
+      .getSheetNames();
+  }
+
+  // ── Step 1: Template ─────────────────────────────────────────────────────────
+  function loadTemplate() {
+    var raw = document.getElementById('templateInput').value.trim();
+    if (!raw) return showStatus('s0status', 'error', 'Paste a Google Doc URL or file ID.');
+    showStatus('s0status', 'info', 'Checking template…');
+
+    google.script.run
+      .withSuccessHandler(function(meta) {
+        templateId = meta.id;
+        document.getElementById('templateInfo').textContent = '✓ ' + meta.name;
+        document.getElementById('templateInfo').style.display = 'block';
+        showStatus('s0status', 'success', 'Template loaded.');
+        document.getElementById('s0title').classList.add('confirmed');
+        document.getElementById('s0badge').textContent = meta.name;
+        document.getElementById('s0badge').style.display = 'block';
+        collapseStep('s0body', 's0chev');
+        updateRunSummary();
+      })
+      .withFailureHandler(function(e) {
+        showStatus('s0status', 'error', e.message || 'Could not load template.');
+      })
+      .validatePtiTemplate(raw);
+  }
+
+  // ── Step 2: Sheet config ──────────────────────────────────────────────────────
+  function onSheetConfigChange() {
+    var sheet  = document.getElementById('sheetSelect').value;
+    var col    = document.getElementById('nameCol').value.trim();
+    var row    = document.getElementById('dataStartRow').value.trim();
+    var colRx  = /^[A-Z]{1,3}$/;
+    var rowOk  = /^\d+$/.test(row) && parseInt(row, 10) >= 1;
+    var allOk  = !!sheet && colRx.test(col) && rowOk;
+
+    document.getElementById('loadStudentsBtn').disabled = !allOk;
+    if (allOk) {
+      document.getElementById('sheetPreview').style.display = 'block';
+      document.getElementById('sheetChip').textContent =
+        '"' + sheet + '" | Names: col ' + col + ' from row ' + row;
+    } else {
+      document.getElementById('sheetPreview').style.display = 'none';
+    }
+  }
+
+  function loadStudents() {
+    var sheet = document.getElementById('sheetSelect').value;
+    var col   = document.getElementById('nameCol').value.trim().toUpperCase();
+    var row   = parseInt(document.getElementById('dataStartRow').value, 10);
+
+    sheetConfig = { sheetName: sheet, nameCol: col, dataStartRow: row };
+    showStatus('s1status', 'info', 'Loading students…');
+    document.getElementById('loadStudentsBtn').disabled = true;
+
+    google.script.run
+      .withSuccessHandler(function(list) {
+        students = list || [];
+        if (!students.length) {
+          showStatus('s1status', 'error', 'No students found in that column.');
+          document.getElementById('loadStudentsBtn').disabled = false;
+          return;
+        }
+        showStatus('s1status', 'success', '✓ ' + students.length + ' student(s) loaded.');
+        document.getElementById('s1title').classList.add('confirmed');
+        document.getElementById('s1badge').textContent = students.length + ' students';
+        document.getElementById('s1badge').style.display = 'block';
+        collapseStep('s1body', 's1chev');
+        updateRunSummary();
+      })
+      .withFailureHandler(function(e) {
+        showStatus('s1status', 'error', e.message || 'Failed to load students.');
+        document.getElementById('loadStudentsBtn').disabled = false;
+      })
+      .getPtiStudents(sheetConfig);
+  }
+
+  // ── Step 3: Column mapping ────────────────────────────────────────────────────
+  function onMappingChange() {
+    // Nothing to validate strictly — all fields are optional
+    // Just ensure both sheet dropdowns have a value selected
+  }
+
+  function confirmMapping() {
+    var spellingSheet = document.getElementById('spellingSheet').value;
+    var orfSheet      = document.getElementById('orfSheet').value;
+    if (!spellingSheet || !orfSheet) {
+      return showStatus('s2status', 'error', 'Please select a sheet tab for both sections.');
+    }
+    mappingConfirmed = true;
+    showStatus('s2status', 'success', '✓ Mapping confirmed.');
+    document.getElementById('s2title').classList.add('confirmed');
+    document.getElementById('s2badge').textContent =
+      'Spelling: ' + spellingSheet + ' · ORF/MAZE: ' + orfSheet;
+    document.getElementById('s2badge').style.display = 'block';
+    collapseStep('s2body', 's2chev');
+    updateRunSummary();
+  }
+
+  // ── Step 4: Generate ──────────────────────────────────────────────────────────
+  function updateRunSummary() {
+    var summary = document.getElementById('runSummary');
+    var btn     = document.getElementById('generateBtn');
+    var diagBtn = document.getElementById('diagnoseBtn');
+    var ready   = templateId && students.length > 0 && mappingConfirmed;
+
+    btn.disabled     = !ready;
+    diagBtn.disabled = !ready;
+
+    if (ready) {
+      var suffix   = document.getElementById('suffixInput').value.trim() || 'S1 PTI 2026';
+      var example  = students.length > 0
+        ? formatNameClient(students[0].name) + ' - ' + suffix
+        : 'Last First - ' + suffix;
+      summary.style.display = 'block';
+      summary.innerHTML =
+        '<strong>Ready to generate ' + students.length + ' document(s)</strong>' +
+        'Template: ✓ loaded<br>' +
+        'Example filename: <em>' + esc(example) + '</em>';
+    } else {
+      summary.style.display = 'none';
+    }
+  }
+
+  function runDiagnosis() {
+    var config = buildConfig();
+    document.getElementById('diagnoseBtn').disabled = true;
+    showStatus('diagnoseStatus', 'info', 'Checking name matching across sheets…');
+
+    google.script.run
+      .withSuccessHandler(function(report) {
+        document.getElementById('diagnoseBtn').disabled = false;
+        // Show report in a scrollable box
+        var existing = document.getElementById('diagReport');
+        if (existing) existing.parentNode.removeChild(existing);
+        var pre = document.createElement('pre');
+        pre.id = 'diagReport';
+        pre.style.cssText = 'font-size:10px;line-height:1.5;background:#f1f3f4;' +
+          'border:1px solid #e8eaed;border-radius:4px;padding:8px;margin-top:8px;' +
+          'max-height:220px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;';
+        pre.textContent = report;
+        document.getElementById('s3body').appendChild(pre);
+        showStatus('diagnoseStatus', 'success', 'Diagnosis complete — check results below.');
+      })
+      .withFailureHandler(function(e) {
+        document.getElementById('diagnoseBtn').disabled = false;
+        showStatus('diagnoseStatus', 'error', 'Diagnosis failed: ' + (e.message || e));
+      })
+      .diagnosePtiData(config);
+  }
+
+  function buildConfig() {
+    var suffix   = document.getElementById('suffixInput').value.trim() || 'S1 PTI 2026';
+    var dateTime = document.getElementById('dateTimeInput').value.trim();
+    var fieldMap = {};
+    ['SpellingScore','ChronAge','SpellingAge','Difference',
+     'ORFCorrect','ORFError','MAZECorrect','MAZEError'].forEach(function(key) {
+      fieldMap[key] = document.getElementById('col_' + key).value.trim();
+    });
+    return {
+      templateId:       templateId,
+      sheetName:        sheetConfig.sheetName,
+      nameCol:          sheetConfig.nameCol,
+      dataStartRow:     sheetConfig.dataStartRow,
+      spellingSheet:    document.getElementById('spellingSheet').value,
+      spellingNameCol:  document.getElementById('spellingNameCol').value.trim() || sheetConfig.nameCol,
+      spellingStartRow: parseInt(document.getElementById('spellingStartRow').value, 10) || 2,
+      orfSheet:         document.getElementById('orfSheet').value,
+      orfNameCol:       document.getElementById('orfNameCol').value.trim() || sheetConfig.nameCol,
+      orfStartRow:      parseInt(document.getElementById('orfStartRow').value, 10) || 2,
+      suffix:           suffix,
+      dateTime:         dateTime,
+      fieldMap:         fieldMap,
+    };
+  }
+
+  function runGenerate() {
+    var config = buildConfig();
+
+    document.getElementById('generateBtn').disabled = true;
+    document.getElementById('progressWrap').style.display = 'block';
+    document.getElementById('results').innerHTML = '';
+    showStatus('s3status', 'info', 'Generating documents…');
+    setProgress(10, 'Creating documents…');
+
+    google.script.run
+      .withSuccessHandler(function(results) {
+        setProgress(100, 'Done!');
+        var ok   = 0;
+        var fail = 0;
+        results.forEach(function(r) {
+          var div = document.createElement('div');
+          if (r.success) {
+            ok++;
+            div.className = 'result-item result-ok';
+            div.innerHTML = '✓ ' + esc(r.name) +
+              ' — <a href="' + r.url + '" target="_blank" style="color:#137333;">open</a>';
+          } else {
+            fail++;
+            div.className = 'result-item result-fail';
+            div.textContent = '✗ ' + r.name + ': ' + (r.error || 'Unknown error');
+          }
+          document.getElementById('results').appendChild(div);
+        });
+
+        if (fail === 0) {
+          showStatus('s3status', 'success',
+            '✓ ' + ok + ' document(s) created successfully.');
+        } else {
+          showStatus('s3status', 'warn',
+            ok + ' succeeded, ' + fail + ' failed. Check results above.');
+        }
+        document.getElementById('generateBtn').disabled = false;
+      })
+      .withFailureHandler(function(e) {
+        setProgress(0, '');
+        showStatus('s3status', 'error', 'Generation failed: ' + (e.message || e));
+        document.getElementById('generateBtn').disabled = false;
+      })
+      .generatePtiDocuments(config);
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Client-side name formatter (mirrors server-side formatStudentName).
+   * "First Last" → "Last First", "First Middle Last" → "Last First Middle"
+   */
+  function formatNameClient(name) {
+    if (name.indexOf(',') !== -1) {
+      var parts = name.split(',');
+      return parts[0].trim() + ' ' + parts[1].trim();
+    }
+    var parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0];
+    var last  = parts[parts.length - 1];
+    var first = parts.slice(0, parts.length - 1).join(' ');
+    return last + ' ' + first;
+  }
+
+  function setProgress(pct, label) {
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = label;
+  }
+
+  function toggleStep(bodyId, chevId) {
+    var body = document.getElementById(bodyId);
+    var chev = document.getElementById(chevId);
+    var collapsed = body.classList.toggle('collapsed');
+    if (collapsed) chev.classList.remove('open'); else chev.classList.add('open');
+  }
+
+  function collapseStep(bodyId, chevId) {
+    document.getElementById(bodyId).classList.add('collapsed');
+    document.getElementById(chevId).classList.remove('open');
+  }
+
+  function showStatus(id, type, msg) {
+    var el = document.getElementById(id);
+    el.className = 'status ' + type;
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+
+</body>
+</html>
