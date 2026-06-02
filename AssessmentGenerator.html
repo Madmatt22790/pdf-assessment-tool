@@ -240,14 +240,14 @@
     </div>
     <div class="step-body" id="s2oBody">
       <p style="font-size:12px;color:#5f6368;margin-bottom:8px;line-height:1.5;">
-        If your assessment has outcome indicators, type <strong>○</strong> before each outcome
+        If your assessment has outcome indicators, type <strong>[O]</strong> before each outcome
         line in your Word/Google Doc before exporting to PDF. When the PDF is loaded above,
         click <em>Scan for Outcomes</em> to detect them automatically.
       </p>
       <p style="font-size:12px;color:#5f6368;margin-bottom:8px;line-height:1.5;">
         Example line in your doc:<br>
         <span style="font-family:monospace;background:#f1f3f4;padding:2px 6px;border-radius:3px;">
-          ○ Counting forwards and backward by tens and hundreds
+          [O] Counting forwards and backward by tens and hundreds
         </span>
       </p>
 
@@ -795,7 +795,7 @@
     var chain = Promise.resolve();
 
     // Build outcome payload for page 1 QR — encoded once, read by splitter
-    // Format: studentId|p1ofN|OC:sheetName|O:text~yPct~page|O:...
+    // Format: studentId|p1ofN|OC:sheetName|O:text~yPct~xPct~page|O:...
     // Uses ~ and | as delimiters (safe — outcome text won't contain these)
     var outcomePayload = '';
     if (outcomesConfig && detectedOutcomes.length > 0) {
@@ -803,7 +803,7 @@
       detectedOutcomes.forEach(function(o) {
         // Sanitise text — remove any | or ~ characters just in case
         var safeText = o.text.replace(/[|~]/g, ' ').trim();
-        outcomePayload += '|O:' + safeText + '~' + o.yPct + '~' + o.page;
+        outcomePayload += '|O:' + safeText + '~' + o.yPct + '~' + o.xPct + '~' + o.page;
       });
     }
 

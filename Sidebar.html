@@ -701,10 +701,12 @@
                                 } else if (parts[p].indexOf('O:') === 0) {
                                   var oData = parts[p].substring(2).split('~');
                                   if (oData.length >= 3) {
+                                    var hasX = oData.length >= 4;
                                     outcomes.push({
                                       text:  oData[0],
                                       yPct:  parseFloat(oData[1]),
-                                      page:  parseInt(oData[2], 10),
+                                      xPct:  hasX ? parseFloat(oData[2]) : 0,
+                                      page:  parseInt(hasX ? oData[3] : oData[2], 10),
                                     });
                                   }
                                 }
@@ -1391,9 +1393,10 @@
               // top = 1.0). Convert to canvas pixel Y (canvas origin = top-left).
               // Sample a small region around the [O] character.
               var yCanvas  = Math.round(outcome.yPct * vp.height);
-              var sampleH  = Math.round(0.03 * vp.height);  // ~3% of page height
-              var sampleW  = Math.round(0.06 * vp.width);   // ~6% of page width
-              var sampleX  = 0;  // [O] markers are typically in left margin
+              var xCanvas  = Math.round((outcome.xPct || 0) * vp.width);
+              var sampleH  = Math.round(0.07 * vp.height);  // 7% height — tolerates scanner shift
+              var sampleW  = Math.round(0.08 * vp.width);   // 8% width — tolerates horizontal shift
+              var sampleX  = Math.max(0, xCanvas - Math.round(sampleW / 2));
               var sampleY  = Math.max(0, yCanvas - Math.round(sampleH / 2));
 
               // Clamp to canvas bounds
