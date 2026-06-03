@@ -56,6 +56,39 @@ function saveGeneratedAssessment(base64Pdf, sourceFileId, fileName) {
 }
 
 /**
+ * Fuzzy-matches a list of outcome texts against the outcomes sheet and returns
+ * [{text, row, matchedText}] for each. row is null when no match is found.
+ * Reuses tokenise/wordOverlapScore from PDFSplitter.gs (same script scope).
+ * Called at generation time so QR codes store row numbers, not full text.
+ */
+function matchOutcomesFromSheet(sheetName, outcomeTexts) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) throw new Error('Sheet not found: ' + sheetName);
+  var lastRow = sheet.getLastRow();
+  var sheetOutcomes = [];
+  for (var row = 3; row <= lastRow; row++) {
+    var text = String(sheet.getRange(row, 2).getValue()).trim();
+    if (text) sheetOutcomes.push({ row: row, text: text });
+  }
+  var THRESHOLD = 0.35;
+  return outcomeTexts.map(function(text) {
+    var queryWords = tokenise(text);
+    var bestScore  = 0;
+    var bestRow    = null;
+    var bestText   = null;
+    sheetOutcomes.forEach(function(s) {
+      var score = wordOverlapScore(queryWords, tokenise(s.text));
+      if (score > bestScore) { bestScore = score; bestRow = s.row; bestText = s.text; }
+    });
+    return {
+      text:        text,
+      row:         bestScore >= THRESHOLD ? bestRow : null,
+      matchedText: bestScore >= THRESHOLD ? bestText : null
+    };
+  });
+}
+
+/**
  * Returns the OAuth token and parent folder ID needed for a direct
  * browser-to-Drive upload. The file bytes never pass through Apps Script.
  */
