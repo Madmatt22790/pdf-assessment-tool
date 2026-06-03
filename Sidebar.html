@@ -701,11 +701,14 @@
                                 if (parts[p].indexOf('OC:') === 0) {
                                   sheetName = parts[p].substring(3);
                                 } else if (parts[p].indexOf('O:') === 0) {
-                                  var oData = parts[p].substring(2).split('~');
+                                  var oData  = parts[p].substring(2).split('~');
                                   if (oData.length >= 3) {
-                                    var hasX = oData.length >= 4;
+                                    var hasX   = oData.length >= 4;
+                                    var rowNum = parseInt(oData[0], 10);
+                                    var isRow  = !isNaN(rowNum) && rowNum >= 3;
                                     outcomes.push({
-                                      text:  oData[0],
+                                      row:   isRow ? rowNum  : null,
+                                      text:  isRow ? null    : oData[0],
                                       yPct:  parseFloat(oData[1]),
                                       xPct:  hasX ? parseFloat(oData[2]) : 0,
                                       page:  parseInt(hasX ? oData[3] : oData[2], 10),
@@ -1517,7 +1520,7 @@
               }
 
               var avgDarkness = totalDarkness / count;
-              results.push({ text: outcome.text, achieved: avgDarkness > DARKNESS_THRESHOLD });
+              results.push({ row: outcome.row, text: outcome.text, achieved: avgDarkness > DARKNESS_THRESHOLD });
             });
         });
       });
