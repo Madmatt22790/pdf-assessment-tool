@@ -349,8 +349,9 @@
   var fileConfirmed   = false;
   var sheetConfig     = null;
   var PDFDocument     = null;
-  var detectedOutcomes = [];   // [{text, yPct, page}] found in PDF text layer
-  var outcomesConfig   = null; // {sheetName, nameRow, nameCol, textCol} or null if skipped
+  var detectedOutcomes   = [];  // [{row, text, yPct, xPct, page}] matched outcomes ready for QR
+  var pendingRawOutcomes = [];  // raw [{text, yPct, xPct, page}] from PDF scan, kept for re-matching
+  var outcomesConfig     = null;
 
   window.addEventListener('load', function() {
     setTimeout(function() { loadSheetNames(0); }, 500);
@@ -567,7 +568,7 @@
       .then(function(found) {
         // Deduplicate by text
         var seen = {};
-        detectedOutcomes = found.filter(function(o) {
+        var rawOutcomes = found.filter(function(o) {
           if (seen[o.text]) return false;
           seen[o.text] = true;
           return true;
@@ -575,28 +576,39 @@
 
         document.getElementById('scanOutcomesBtn').disabled = false;
 
-        if (!detectedOutcomes.length) {
+        if (!rawOutcomes.length) {
           showStatus('s2oStatus', 'warn',
-            'No [O] markers found in the PDF. Make sure you\'ve typed [O] before each outcome line.');
+            'No [O] markers found. Make sure you\'ve typed [O] before each outcome line.');
           return;
         }
 
-        showStatus('s2oStatus', 'success',
-          'Found ' + detectedOutcomes.length + ' outcome(s). Review below.');
+        var sheetName = document.getElementById('outcomesSheet').value;
+        if (!sheetName) {
+          showStatus('s2oStatus', 'error', 'Select an outcomes sheet tab before scanning.');
+          return;
+        }
 
-        // Display for confirmation
-        var list = document.getElementById('outcomesList');
-        list.innerHTML = '';
-        detectedOutcomes.forEach(function(o, i) {
-          var div = document.createElement('div');
-          div.style.cssText = 'font-size:11px;background:#e8f0fe;border-radius:4px;' +
-                              'padding:5px 8px;color:#1a73e8;line-height:1.4;';
-          div.innerHTML = '<strong>[O] ' + (i + 1) + '</strong> — ' + esc(o.text) +
-                          ' <span style="color:#9aa0a6;">(p.' + o.page + ')</span>';
-          list.appendChild(div);
+        showStatus('s2oStatus', 'info', 'Matching ' + rawOutcomes.length + ' outcome(s) against sheet…');
+        pendingRawOutcomes = rawOutcomes;
+
+        return new Promise(function(resolve, reject) {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(function(e) { reject(new Error(e.message)); })
+            .matchOutcomesFromSheet(sheetName, rawOutcomes.map(function(o) { return o.text; }));
+        }).then(function(matchResults) {
+          detectedOutcomes = [];
+          var unmatched = [];
+          rawOutcomes.forEach(function(o, i) {
+            var m = matchResults[i];
+            if (m.row) {
+              detectedOutcomes.push({ row: m.row, text: o.text, yPct: o.yPct, xPct: o.xPct, page: o.page });
+            } else {
+              unmatched.push({ index: i, outcome: o });
+            }
+          });
+          showOutcomeMatchResults(detectedOutcomes, unmatched, sheetName);
         });
-        document.getElementById('outcomesDetected').style.display = 'block';
-        document.getElementById('confirmOutcomesBtn').style.display = 'block';
       })
       .catch(function(err) {
         document.getElementById('scanOutcomesBtn').disabled = false;
@@ -622,6 +634,69 @@
     collapseStep('s2oBody', 's2oChev');
     showStatus('s2oStatus', 'success', '✓ ' + detectedOutcomes.length + ' outcomes confirmed.');
     updateRunButton();
+  }
+
+  function showOutcomeMatchResults(matched, unmatched, sheetName) {
+    var list = document.getElementById('outcomesList');
+    list.innerHTML = '';
+    matched.forEach(function(o) {
+      var div = document.createElement('div');
+      div.style.cssText = 'font-size:11px;background:#e6f4ea;border-radius:4px;padding:5px 8px;color:#137333;';
+      div.innerHTML = '✓ Row ' + o.row + ' — ' + esc(o.text) + ' <span style="color:#9aa0a6;">(p.' + o.page + ')</span>';
+      list.appendChild(div);
+    });
+    unmatched.forEach(function(item) {
+      var o = item.outcome;
+      var div = document.createElement('div');
+      div.id = 'omrow_' + item.index;
+      div.style.cssText = 'font-size:11px;background:#fff3cd;border-radius:4px;padding:6px 8px;color:#856404;';
+      div.innerHTML =
+        '⚠ Not found: <em>' + esc(o.text) + '</em> (p.' + o.page + ')<br>' +
+        '<div style="display:flex;gap:5px;margin-top:5px;">' +
+          '<button class="btn btn-primary btn-sm" onclick="addAndMatchOutcome(' + item.index + ',\'' + esc(sheetName) + '\')">+ Add to Sheet</button>' +
+          '<button class="btn btn-outline btn-sm" onclick="skipOutcomeMatch(' + item.index + ')">Skip</button>' +
+        '</div>' +
+        '<div id="omstatus_' + item.index + '" style="font-size:10px;margin-top:3px;"></div>';
+      list.appendChild(div);
+    });
+    document.getElementById('outcomesDetected').style.display = 'block';
+    checkAllOutcomesResolved();
+  }
+
+  function addAndMatchOutcome(index, sheetName) {
+    var o = pendingRawOutcomes[index];
+    var statusEl = document.getElementById('omstatus_' + index);
+    statusEl.textContent = 'Adding…';
+    google.script.run
+      .withSuccessHandler(function(result) {
+        // Record the new row in detectedOutcomes
+        detectedOutcomes.push({ row: result.row, text: o.text, yPct: o.yPct, xPct: o.xPct, page: o.page });
+        var row = document.getElementById('omrow_' + index);
+        row.style.cssText = 'font-size:11px;background:#e6f4ea;border-radius:4px;padding:5px 8px;color:#137333;';
+        row.innerHTML = '✓ Row ' + result.row + ' — ' + esc(o.text) + ' <span style="color:#9aa0a6;">(p.' + o.page + ')</span>';
+        checkAllOutcomesResolved();
+      })
+      .withFailureHandler(function(e) {
+        statusEl.textContent = 'Failed: ' + e.message;
+        statusEl.style.color = '#c5221f';
+      })
+      .addOutcomeToSheet(sheetName, o.text);
+  }
+
+  function skipOutcomeMatch(index) {
+    var row = document.getElementById('omrow_' + index);
+    if (row) row.parentNode.removeChild(row);
+    checkAllOutcomesResolved();
+  }
+
+  function checkAllOutcomesResolved() {
+    var anyUnresolved = document.getElementById('outcomesList').querySelector('[id^="omrow_"]');
+    if (!anyUnresolved) {
+      showStatus('s2oStatus', 'success', detectedOutcomes.length + ' outcome(s) matched. Confirm to proceed.');
+      document.getElementById('confirmOutcomesBtn').style.display = 'block';
+    } else {
+      document.getElementById('confirmOutcomesBtn').style.display = 'none';
+    }
   }
 
   function skipOutcomes() {
@@ -791,15 +866,13 @@
     var chain = Promise.resolve();
 
     // Build outcome payload for page 1 QR — encoded once, read by splitter
-    // Format: studentId|p1ofN|OC:sheetName|O:text~yPct~xPct~page|O:...
-    // Uses ~ and | as delimiters (safe — outcome text won't contain these)
+    // Format: studentId|p1ofN|OC:sheetName|O:rowNum~yPct~xPct~page|O:...
+    // Row number replaces full text — much smaller QR code
     var outcomePayload = '';
     if (outcomesConfig && detectedOutcomes.length > 0) {
       outcomePayload = '|OC:' + outcomesConfig.sheetName;
       detectedOutcomes.forEach(function(o) {
-        // Sanitise text — remove any | or ~ characters just in case
-        var safeText = o.text.replace(/[|~]/g, ' ').trim();
-        outcomePayload += '|O:' + safeText + '~' + o.yPct + '~' + o.xPct + '~' + o.page;
+        outcomePayload += '|O:' + o.row + '~' + o.yPct + '~' + o.xPct + '~' + o.page;
       });
     }
 
