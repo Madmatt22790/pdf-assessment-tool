@@ -521,40 +521,45 @@
                 return pdf.getPage(pageNum).then(function(pg) {
                   var viewport = pg.getViewport({ scale: 1.0 });
                   return pg.getTextContent().then(function(content) {
-                    content.items.forEach(function(item) {
-                      var str = item.str;
-                      if (str.indexOf(OUTCOME_SYMBOL) !== -1) {
-                        // Extract text after the symbol
-                        var afterSymbol = str.substring(
-                          str.indexOf(OUTCOME_SYMBOL) + OUTCOME_SYMBOL.length
-                        ).trim();
-                        if (!afterSymbol) return; // symbol alone, text may be next item
-                        // Y position as fraction of page height (PDF coords from bottom)
-                        var yFromTop = 1.0 - (item.transform[5] / viewport.viewBox[3]);
-                        // X position as fraction of page width
-                        var xFrac = item.transform[4] / viewport.viewBox[2];
-                        found.push({
-                          text:  afterSymbol,
-                          yPct:  parseFloat(yFromTop.toFixed(4)),
-                          xPct:  parseFloat(xFrac.toFixed(4)),
-                          page:  pageNum
-                        });
-                      }
-                    });
-                    // Also check for ○ at end of one item with text in next
-                    // by scanning consecutive item pairs
-                    for (var i = 0; i < content.items.length - 1; i++) {
-                      var cur  = content.items[i].str.trim();
-                      var next = content.items[i + 1].str.trim();
-                      if (cur === OUTCOME_SYMBOL && next) {
-                        var yFromTop2 = 1.0 - (content.items[i].transform[5] / viewport.viewBox[3]);
-                        var xFrac2    = content.items[i].transform[4] / viewport.viewBox[2];
-                        found.push({
-                          text: next,
-                          yPct: parseFloat(yFromTop2.toFixed(4)),
-                          xPct: parseFloat(xFrac2.toFixed(4)),
-                          page: pageNum
-                        });
+                    // Single sequential pass — collects continuation lines after [O]
+                    // until a large Y gap (paragraph break) or another [O] is found.
+                    var items = content.items;
+                    var pageH = viewport.viewBox[3];
+                    var pageW = viewport.viewBox[2];
+                    var i = 0;
+                    while (i < items.length) {
+                      var item   = items[i];
+                      var str    = item.str;
+                      var symIdx = str.indexOf(OUTCOME_SYMBOL);
+                      if (symIdx !== -1) {
+                        var text  = str.substring(symIdx + OUTCOME_SYMBOL.length).trim();
+                        var yBase = item.transform[5];
+                        var xBase = item.transform[4];
+                        var lastY = yBase;
+                        var lineH = null;
+                        var j = i + 1;
+                        while (j < items.length) {
+                          var nxt    = items[j];
+                          var nxtStr = nxt.str.trim();
+                          if (nxtStr.indexOf(OUTCOME_SYMBOL) !== -1) break;
+                          var yGap = Math.abs(lastY - nxt.transform[5]) / pageH;
+                          if (lineH === null && yGap > 0.001) lineH = yGap;
+                          if (yGap > (lineH ? lineH * 2.5 : 0.05)) break;
+                          if (nxtStr) text = text ? text + ' ' + nxtStr : nxtStr;
+                          lastY = nxt.transform[5];
+                          j++;
+                        }
+                        if (text.trim()) {
+                          found.push({
+                            text: text.trim(),
+                            yPct: parseFloat((1.0 - yBase / pageH).toFixed(4)),
+                            xPct: parseFloat((xBase / pageW).toFixed(4)),
+                            page: pageNum
+                          });
+                        }
+                        i = j;
+                      } else {
+                        i++;
                       }
                     }
                   });
@@ -597,17 +602,17 @@
             .withFailureHandler(function(e) { reject(new Error(e.message)); })
             .matchOutcomesFromSheet(sheetName, rawOutcomes.map(function(o) { return o.text; }));
         }).then(function(matchResults) {
-          detectedOutcomes = [];
+          var matchedWithIndex = [];
           var unmatched = [];
           rawOutcomes.forEach(function(o, i) {
             var m = matchResults[i];
             if (m.row) {
-              detectedOutcomes.push({ row: m.row, text: o.text, yPct: o.yPct, xPct: o.xPct, page: o.page });
+              matchedWithIndex.push({ rawIndex: i, outcome: o, row: m.row });
             } else {
-              unmatched.push({ index: i, outcome: o });
+              unmatched.push({ rawIndex: i, outcome: o });
             }
           });
-          showOutcomeMatchResults(detectedOutcomes, unmatched, sheetName);
+          showOutcomeMatchResults(matchedWithIndex, unmatched, sheetName);
         });
       })
       .catch(function(err) {
@@ -626,10 +631,21 @@
     var nameCol = document.getElementById('outcomesNameCol').value.trim().toUpperCase() || 'C';
     var textCol = document.getElementById('outcomesTextCol').value.trim().toUpperCase() || 'B';
     if (!sheet) return showStatus('s2oStatus', 'error', 'Select an outcomes sheet tab.');
+
+    // Rebuild detectedOutcomes from inputs — captures manual row overrides
+    detectedOutcomes = [];
+    for (var i = 0; i < pendingRawOutcomes.length; i++) {
+      var inp = document.getElementById('omrowinput_' + i) || document.getElementById('omrownum_' + i);
+      if (!inp || !inp.value) continue;
+      var row = parseInt(inp.value, 10);
+      if (!row || row < 3) continue;
+      var o = pendingRawOutcomes[i];
+      detectedOutcomes.push({ row: row, text: o.text, yPct: o.yPct, xPct: o.xPct, page: o.page });
+    }
+
     outcomesConfig = { sheetName: sheet, nameRow: nameRow, nameCol: nameCol, textCol: textCol };
     document.getElementById('s2oTitle').classList.add('confirmed');
-    document.getElementById('s2oBadge').textContent =
-      detectedOutcomes.length + ' outcomes → ' + sheet;
+    document.getElementById('s2oBadge').textContent = detectedOutcomes.length + ' outcomes → ' + sheet;
     document.getElementById('s2oBadge').style.display = 'block';
     collapseStep('s2oBody', 's2oChev');
     showStatus('s2oStatus', 'success', '✓ ' + detectedOutcomes.length + ' outcomes confirmed.');
@@ -639,41 +655,57 @@
   function showOutcomeMatchResults(matched, unmatched, sheetName) {
     var list = document.getElementById('outcomesList');
     list.innerHTML = '';
-    matched.forEach(function(o) {
+
+    // Matched outcomes — editable row number so teacher can override if wrong
+    matched.forEach(function(item) {
+      var o = item.outcome;
       var div = document.createElement('div');
-      div.style.cssText = 'font-size:11px;background:#e6f4ea;border-radius:4px;padding:5px 8px;color:#137333;';
-      div.innerHTML = '✓ Row ' + o.row + ' — ' + esc(o.text) + ' <span style="color:#9aa0a6;">(p.' + o.page + ')</span>';
+      div.style.cssText = 'font-size:11px;background:#e6f4ea;border-radius:4px;padding:6px 8px;margin-bottom:4px;';
+      div.innerHTML =
+        '<span style="color:#137333;">✓</span> ' +
+        '<label style="display:inline;font-size:11px;color:#5f6368;margin:0 3px;">Row</label>' +
+        '<input type="number" id="omrowinput_' + item.rawIndex + '" value="' + item.row + '" min="3" ' +
+          'style="width:52px;padding:2px 5px;font-size:11px;border:1px solid #a8d5b5;border-radius:3px;display:inline-block;" ' +
+          'onchange="checkAllOutcomesResolved()">' +
+        ' — ' + esc(o.text) + ' <span style="color:#9aa0a6;">(p.' + o.page + ')</span>';
       list.appendChild(div);
     });
+
+    // Unmatched outcomes — teacher types the row number directly, or adds as new row
     unmatched.forEach(function(item) {
       var o = item.outcome;
       var div = document.createElement('div');
-      div.id = 'omrow_' + item.index;
-      div.style.cssText = 'font-size:11px;background:#fff3cd;border-radius:4px;padding:6px 8px;color:#856404;';
+      div.id = 'omrow_' + item.rawIndex;
+      div.style.cssText = 'font-size:11px;background:#fff3cd;border-radius:4px;padding:6px 8px;margin-bottom:4px;color:#856404;';
       div.innerHTML =
-        '⚠ Not found: <em>' + esc(o.text) + '</em> (p.' + o.page + ')<br>' +
-        '<div style="display:flex;gap:5px;margin-top:5px;">' +
-          '<button class="btn btn-primary btn-sm" onclick="addAndMatchOutcome(' + item.index + ',\'' + esc(sheetName) + '\')">+ Add to Sheet</button>' +
-          '<button class="btn btn-outline btn-sm" onclick="skipOutcomeMatch(' + item.index + ')">Skip</button>' +
+        '<div style="margin-bottom:5px;">⚠ Not found: <em>' + esc(o.text) + '</em> <span style="color:#9aa0a6;">(p.' + o.page + ')</span></div>' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+          '<label style="font-size:11px;color:#5f6368;">Row</label>' +
+          '<input type="number" id="omrownum_' + item.rawIndex + '" min="3" placeholder="?" ' +
+            'style="width:52px;padding:2px 5px;font-size:11px;border:1px solid #ffe082;border-radius:3px;" ' +
+            'onchange="checkAllOutcomesResolved()">' +
+          '<button class="btn btn-outline btn-sm" onclick="addAsNewRow(' + item.rawIndex + ',\'' + esc(sheetName) + '\')">+ Add as new row</button>' +
+          '<button class="btn btn-sm" style="background:#fce8e6;color:#c5221f;" onclick="skipOutcomeMatch(' + item.rawIndex + ')">Skip</button>' +
         '</div>' +
-        '<div id="omstatus_' + item.index + '" style="font-size:10px;margin-top:3px;"></div>';
+        '<div id="omstatus_' + item.rawIndex + '" style="font-size:10px;margin-top:3px;"></div>';
       list.appendChild(div);
     });
+
     document.getElementById('outcomesDetected').style.display = 'block';
     checkAllOutcomesResolved();
   }
 
-  function addAndMatchOutcome(index, sheetName) {
-    var o = pendingRawOutcomes[index];
-    var statusEl = document.getElementById('omstatus_' + index);
-    statusEl.textContent = 'Adding…';
+  function addAsNewRow(rawIndex, sheetName) {
+    var o = pendingRawOutcomes[rawIndex];
+    var statusEl = document.getElementById('omstatus_' + rawIndex);
+    statusEl.textContent = 'Adding to sheet…';
+    statusEl.style.color = '#5f6368';
     google.script.run
       .withSuccessHandler(function(result) {
-        // Record the new row in detectedOutcomes
-        detectedOutcomes.push({ row: result.row, text: o.text, yPct: o.yPct, xPct: o.xPct, page: o.page });
-        var row = document.getElementById('omrow_' + index);
-        row.style.cssText = 'font-size:11px;background:#e6f4ea;border-radius:4px;padding:5px 8px;color:#137333;';
-        row.innerHTML = '✓ Row ' + result.row + ' — ' + esc(o.text) + ' <span style="color:#9aa0a6;">(p.' + o.page + ')</span>';
+        var inp = document.getElementById('omrownum_' + rawIndex);
+        if (inp) inp.value = result.row;
+        statusEl.textContent = 'Added as row ' + result.row;
+        statusEl.style.color = '#137333';
         checkAllOutcomesResolved();
       })
       .withFailureHandler(function(e) {
@@ -683,19 +715,25 @@
       .addOutcomeToSheet(sheetName, o.text);
   }
 
-  function skipOutcomeMatch(index) {
-    var row = document.getElementById('omrow_' + index);
-    if (row) row.parentNode.removeChild(row);
+  function skipOutcomeMatch(rawIndex) {
+    var card = document.getElementById('omrow_' + rawIndex);
+    if (card) card.parentNode.removeChild(card);
     checkAllOutcomesResolved();
   }
 
   function checkAllOutcomesResolved() {
-    var anyUnresolved = document.getElementById('outcomesList').querySelector('[id^="omrow_"]');
-    if (!anyUnresolved) {
-      showStatus('s2oStatus', 'success', detectedOutcomes.length + ' outcome(s) matched. Confirm to proceed.');
-      document.getElementById('confirmOutcomesBtn').style.display = 'block';
-    } else {
+    var unresolved = false;
+    document.getElementById('outcomesList').querySelectorAll('[id^="omrow_"]').forEach(function(card) {
+      var inp = card.querySelector('input[type="number"]');
+      if (inp && !inp.value) unresolved = true;
+    });
+    if (unresolved) {
+      showStatus('s2oStatus', 'warn', 'Enter a row number for each unmatched outcome, or skip it.');
       document.getElementById('confirmOutcomesBtn').style.display = 'none';
+    } else {
+      var total = document.getElementById('outcomesList').querySelectorAll('input[type="number"]').length;
+      showStatus('s2oStatus', 'success', total + ' outcome(s) assigned. Confirm to proceed.');
+      document.getElementById('confirmOutcomesBtn').style.display = 'block';
     }
   }
 
