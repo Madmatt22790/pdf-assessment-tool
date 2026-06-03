@@ -4,18 +4,18 @@
 
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('📋 Assessment Tools')
-    .addItem('✂️ Split & Link Scanned PDFs', 'showSplitterSidebar')
-    .addItem('🖨️ Generate Assessment PDFs', 'showGeneratorSidebar')
+    .createMenu('Assessment Tools')
+    .addItem('Generate Assessment PDFs', 'showGeneratorSidebar')
+    .addItem('Split & Link Scanned PDFs', 'showSplitterSidebar')
     .addSeparator()
-    .addItem('📄 Generate PTI Documents', 'showPtiSidebar')
+    .addItem('Generate PTI Documents', 'showPtiSidebar')
     .addToUi();
 }
 
 // ── GitHub source ────────────────────────────────────────────
 // HTML files are fetched from GitHub so all classes stay in sync automatically.
 // Update GITHUB_RAW to point to your own repository.
-var GITHUB_RAW = 'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/';
+var GITHUB_RAW = 'https://raw.githubusercontent.com/Madmatt22790/pdf-assessment-tool/main/';
 
 function fetchSidebarHtml_(filename) {
   try {
