@@ -692,7 +692,7 @@
             })
             .then(function(combinedBytes) {
               var fileName = 'Assessments_' + sheetConfig.sheetName + '_' + todayString() + '.pdf';
-              return saveAssessmentInChunks(combinedBytes, fileName);
+              return saveAssessmentDirect(combinedBytes, fileName);
             })
             .then(function(result) {
               setProgress(100, 'Done!');
@@ -1027,62 +1027,89 @@
   }
 
   /**
-   * Uploads the combined assessment PDF to Drive in 5 MB chunks via
-   * Drive's resumable upload API, relayed through Apps Script.
-   * Mirrors the chunked download pattern used by the PDF Splitter.
+   * Uploads the combined PDF directly from the browser to the Drive API,
+   * bypassing Apps Script entirely for the file bytes.
+   * Only the OAuth token and final sharing step go through Apps Script.
    */
-  function saveAssessmentInChunks(bytes, fileName) {
-    var CHUNK     = 5 * 1024 * 1024;  // 5 MB per round trip
+  function saveAssessmentDirect(bytes, fileName) {
     var totalSize = bytes.length;
-
-    console.log('[Save] Starting upload — file:', fileName,
-                '| size:', (totalSize / 1024 / 1024).toFixed(2) + ' MB',
-                '| chunks needed:', Math.ceil(totalSize / CHUNK));
+    console.log('[Save] Starting direct upload —', fileName,
+                (totalSize / 1024 / 1024).toFixed(2) + ' MB');
 
     return new Promise(function(resolve, reject) {
-      setProgress(90, 'Saving to Drive… 0%');
+      setProgress(90, 'Preparing upload…');
 
-      console.log('[Save] Calling startAssessmentUpload…');
+      // Step 1: Get OAuth token + folder ID from Apps Script (small call)
+      console.log('[Save] Getting upload credentials…');
       google.script.run
-        .withSuccessHandler(function(uploadUrl) {
-          console.log('[Save] Upload session started. URL:', uploadUrl);
-          var offset = 0;
+        .withSuccessHandler(function(info) {
+          console.log('[Save] Got credentials. Folder:', info.folderId);
+          setProgress(91, 'Starting upload session…');
 
-          function nextChunk() {
-            var chunkEnd    = Math.min(offset + CHUNK, totalSize);
-            var chunkBytes  = bytes.slice(offset, chunkEnd);
-            var chunkOffset = offset;
-            var b64         = uint8ToBase64(chunkBytes);
-            console.log('[Save] Uploading chunk — offset:', chunkOffset,
-                        '| chunk size:', ((chunkEnd - chunkOffset) / 1024).toFixed(0) + ' KB',
-                        '| progress:', Math.round(chunkOffset / totalSize * 100) + '%');
-            setProgress(90 + Math.round((offset / totalSize) * 9), 'Saving to Drive… ' + Math.round(offset / totalSize * 100) + '%');
+          // Step 2: Start a resumable upload session directly from the browser
+          fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + info.token,
+              'Content-Type': 'application/json',
+              'X-Upload-Content-Type': 'application/pdf',
+              'X-Upload-Content-Length': String(totalSize)
+            },
+            body: JSON.stringify({ name: fileName, parents: [info.folderId] })
+          })
+          .then(function(resp) {
+            var uploadUrl = resp.headers.get('Location');
+            console.log('[Save] Session started. Status:', resp.status, '| URL obtained:', !!uploadUrl);
+            if (!uploadUrl) throw new Error('No upload URL from Drive (HTTP ' + resp.status + ')');
 
+            setProgress(92, 'Uploading to Drive…');
+            console.log('[Save] Uploading file bytes directly…');
+
+            // Step 3: Upload the full file in one PUT (browser handles any size)
+            return fetch(uploadUrl, {
+              method: 'PUT',
+              headers: {
+                'Authorization': 'Bearer ' + info.token,
+                'Content-Type': 'application/pdf'
+              },
+              body: new Blob([bytes], { type: 'application/pdf' })
+            });
+          })
+          .then(function(resp) {
+            console.log('[Save] Upload response status:', resp.status);
+            if (resp.status !== 200 && resp.status !== 201) {
+              return resp.text().then(function(t) {
+                throw new Error('Upload failed HTTP ' + resp.status + ': ' + t);
+              });
+            }
+            return resp.json();
+          })
+          .then(function(file) {
+            console.log('[Save] Upload complete. File ID:', file.id);
+            setProgress(99, 'Finalising…');
+
+            // Step 4: Set sharing via Apps Script and get the URL
             google.script.run
               .withSuccessHandler(function(result) {
-                console.log('[Save] Chunk response:', result);
-                if (result.done) {
-                  console.log('[Save] Upload complete. URL:', result.url);
-                  resolve(result);
-                } else {
-                  offset = chunkEnd;
-                  nextChunk();
-                }
+                console.log('[Save] Done. URL:', result.url);
+                resolve(result);
               })
               .withFailureHandler(function(e) {
-                console.error('[Save] uploadAssessmentChunk failed:', e.message, e);
+                console.error('[Save] finalizeAssessmentFile failed:', e.message);
                 reject(new Error(e.message));
               })
-              .uploadAssessmentChunk(uploadUrl, b64, chunkOffset, totalSize, fileName);
-          }
-
-          nextChunk();
+              .finalizeAssessmentFile(file.id, fileName);
+          })
+          .catch(function(err) {
+            console.error('[Save] fetch error:', err.message, err);
+            reject(err);
+          });
         })
         .withFailureHandler(function(e) {
-          console.error('[Save] startAssessmentUpload failed:', e.message, e);
+          console.error('[Save] getDriveUploadInfo failed:', e.message);
           reject(new Error(e.message));
         })
-        .startAssessmentUpload(assessmentFileId, fileName, totalSize);
+        .getDriveUploadInfo(assessmentFileId);
     });
   }
 
