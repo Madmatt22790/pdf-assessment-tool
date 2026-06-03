@@ -151,23 +151,32 @@ function writeOutcomesToSheet(results) {
     // Write Y or N for each outcome
     for (var o = 0; o < result.outcomes.length; o++) {
       var outcomeResult = result.outcomes[o];
-      var bestRow = fuzzyMatchOutcome(outcomeResult.text, outcomeTexts);
-      if (bestRow) {
-        var cell     = sheet.getRange(bestRow, studentCol);
-        var existing = String(cell.getValue()).trim().toUpperCase();
-        var incoming = outcomeResult.achieved ? 'Y' : 'N';
-        if (existing === '') {
-          cell.setValue(incoming);                      // empty — always fill
-        } else if (existing === 'N' && incoming === 'Y') {
-          cell.setValue('Y');                           // now can do it — upgrade
-        } else if (existing === 'Y' && incoming === 'N') {
-          cell.setValue('M');                           // regression — flag for review
+      var targetRow;
+
+      if (outcomeResult.row && outcomeResult.row >= 3) {
+        targetRow = outcomeResult.row;                  // new format — row from QR
+      } else if (outcomeResult.text) {
+        targetRow = fuzzyMatchOutcome(outcomeResult.text, outcomeTexts);  // legacy text format
+        if (!targetRow) {
+          errors.push({ type: 'noMatch', text: outcomeResult.text, sheetName: sheetName });
+          continue;
         }
-        // Y+Y, N+N, M+anything → leave as is
-        written++;
       } else {
-        errors.push({ type: 'noMatch', text: outcomeResult.text, sheetName: sheetName });
+        continue;
       }
+
+      var cell     = sheet.getRange(targetRow, studentCol);
+      var existing = String(cell.getValue()).trim().toUpperCase();
+      var incoming = outcomeResult.achieved ? 'Y' : 'N';
+      if (existing === '') {
+        cell.setValue(incoming);                        // empty — always fill
+      } else if (existing === 'N' && incoming === 'Y') {
+        cell.setValue('Y');                             // now can do it — upgrade
+      } else if (existing === 'Y' && incoming === 'N') {
+        cell.setValue('M');                             // regression — flag for review
+      }
+      // Y+Y, N+N, M+anything → leave as is
+      written++;
     }
   }
 
