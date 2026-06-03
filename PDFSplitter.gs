@@ -104,10 +104,11 @@ function writeScoresToSheet(scores, config) {
  * }]
  *
  * Outcomes sheet layout:
- *   Row 1: student first names starting at column C (col index 3)
- *   Col B (index 2): outcome text, starting from row 2
+ *   Row 1: student IDs starting at column C (col index 3)
+ *   Row 2: student first names starting at column C
+ *   Col B (index 2): outcome text, starting from row 3
  *
- * Student matching: fuzzy match on first name (col C onward in row 1)
+ * Student matching: exact match on student ID (row 1), fallback to name (row 2)
  * Outcome matching: fuzzy match on outcome text in col B
  */
 function writeOutcomesToSheet(results) {
@@ -131,16 +132,16 @@ function writeOutcomesToSheet(results) {
     var lastCol = sheet.getLastColumn();
     var lastRow = sheet.getLastRow();
 
-    // Find student column — row 1, starting at col C (3)
-    var studentCol = findStudentColumn(sheet, result.studentName, lastCol);
+    // Find student column — ID in row 1, name in row 2, starting at col C (3)
+    var studentCol = findStudentColumn(sheet, result.studentName, result.studentId, lastCol);
     if (!studentCol) {
       errors.push('Student not found in outcomes sheet: ' + result.studentName);
       continue;
     }
 
-    // Build outcome text list from col B (2), rows 2 onward
+    // Build outcome text list from col B (2), rows 3 onward (rows 1-2 are header rows)
     var outcomeTexts = [];
-    for (var row = 2; row <= lastRow; row++) {
+    for (var row = 3; row <= lastRow; row++) {
       outcomeTexts.push({
         row:  row,
         text: String(sheet.getRange(row, 2).getValue()).trim()
@@ -152,10 +153,20 @@ function writeOutcomesToSheet(results) {
       var outcomeResult = result.outcomes[o];
       var bestRow = fuzzyMatchOutcome(outcomeResult.text, outcomeTexts);
       if (bestRow) {
-        sheet.getRange(bestRow, studentCol).setValue(outcomeResult.achieved ? 'Y' : 'N');
+        var cell     = sheet.getRange(bestRow, studentCol);
+        var existing = String(cell.getValue()).trim().toUpperCase();
+        var incoming = outcomeResult.achieved ? 'Y' : 'N';
+        if (existing === '') {
+          cell.setValue(incoming);                      // empty — always fill
+        } else if (existing === 'N' && incoming === 'Y') {
+          cell.setValue('Y');                           // now can do it — upgrade
+        } else if (existing === 'Y' && incoming === 'N') {
+          cell.setValue('M');                           // regression — flag for review
+        }
+        // Y+Y, N+N, M+anything → leave as is
         written++;
       } else {
-        errors.push('No match for outcome: "' + outcomeResult.text + '"');
+        errors.push({ type: 'noMatch', text: outcomeResult.text, sheetName: sheetName });
       }
     }
   }
@@ -164,15 +175,24 @@ function writeOutcomesToSheet(results) {
 }
 
 /**
- * Finds the column of a student in row 1 of the outcomes sheet.
- * Matches on first name only (case-insensitive).
+ * Finds the column of a student in the outcomes sheet.
+ * Tries exact match on student ID in row 1 first (most reliable),
+ * then falls back to first name / full name match in row 2.
  */
-function findStudentColumn(sheet, fullName, lastCol) {
-  // Try matching first name against row 1
+function findStudentColumn(sheet, fullName, studentId, lastCol) {
+  // Row 1 — student IDs (exact match)
+  if (studentId) {
+    var idStr = String(studentId).trim().toLowerCase();
+    for (var col = 3; col <= lastCol; col++) {
+      if (String(sheet.getRange(1, col).getValue()).trim().toLowerCase() === idStr) return col;
+    }
+  }
+  // Row 2 — student names (first name or full name, case-insensitive)
   var firstName = fullName.trim().split(/\s+/)[0].toLowerCase();
+  var fullLower = fullName.trim().toLowerCase();
   for (var col = 3; col <= lastCol; col++) {
-    var cell = String(sheet.getRange(1, col).getValue()).trim().toLowerCase();
-    if (cell === firstName || cell === fullName.toLowerCase()) return col;
+    var cell = String(sheet.getRange(2, col).getValue()).trim().toLowerCase();
+    if (cell === firstName || cell === fullLower) return col;
   }
   return null;
 }
@@ -196,6 +216,18 @@ function fuzzyMatchOutcome(queryText, outcomeTexts) {
   }
 
   return bestScore >= THRESHOLD ? bestRow : null;
+}
+
+/**
+ * Adds a new outcome row to the outcomes sheet (column B, next blank row).
+ * Called when the sidebar user flags an unmatched outcome and chooses to add it.
+ */
+function addOutcomeToSheet(sheetName, outcomeText) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) throw new Error('Sheet "' + sheetName + '" not found.');
+  var newRow = sheet.getLastRow() + 1;
+  sheet.getRange(newRow, 2).setValue(outcomeText.trim());
+  return { row: newRow };
 }
 
 function tokenise(str) {
