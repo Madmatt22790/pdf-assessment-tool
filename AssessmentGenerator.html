@@ -1047,7 +1047,9 @@
           setProgress(91, 'Starting upload session…');
 
           // Step 2: Start a resumable upload session directly from the browser
-          fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+          // supportsAllDrives=true is required when the parent folder is in a Shared Drive
+          console.log('[Save] Folder ID:', info.folderId, '(compare with error file ID to confirm Shared Drive)');
+          fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true', {
             method: 'POST',
             headers: {
               'Authorization': 'Bearer ' + info.token,
