@@ -903,22 +903,22 @@
   function stampPagesWithPerPageQR(outputPdf, pages, student, pageCount, maxScore) {
     var chain = Promise.resolve();
 
-    // Build outcome payload for page 1 QR — encoded once, read by splitter
-    // Format: studentId|p1ofN|OC:sheetName|O:rowNum~yPct~xPct~page|O:...
-    // Row number replaces full text — much smaller QR code
-    var outcomePayload = '';
-    if (outcomesConfig && detectedOutcomes.length > 0) {
-      outcomePayload = '|OC:' + outcomesConfig.sheetName;
-      detectedOutcomes.forEach(function(o) {
-        outcomePayload += '|O:' + o.row + '~' + o.yPct + '~' + o.xPct + '~' + o.page;
-      });
-    }
-
+    // Each page's QR carries only outcomes that appear on that page.
+    // OC: (sheet name) is on page 1 only. yPct/xPct rounded to 3dp to keep QR small.
+    // Format: studentId|pNofTotal[|OC:sheetName][|O:row~yPct~xPct~page|...]
     pages.forEach(function(page, i) {
       var pageNum = i + 1;
-      // Only page 1 carries the outcome payload — other pages use short format
-      var qrData = student.id + '|p' + pageNum + 'of' + pageCount +
-                   (pageNum === 1 ? outcomePayload : '');
+      var pagePayload = '';
+      if (outcomesConfig && detectedOutcomes.length > 0) {
+        if (pageNum === 1) pagePayload = '|OC:' + outcomesConfig.sheetName;
+        detectedOutcomes.forEach(function(o) {
+          if (o.page === pageNum) {
+            pagePayload += '|O:' + o.row + '~' + parseFloat(o.yPct.toFixed(3)) +
+                           '~' + parseFloat(o.xPct.toFixed(3)) + '~' + o.page;
+          }
+        });
+      }
+      var qrData = student.id + '|p' + pageNum + 'of' + pageCount + pagePayload;
       chain = chain.then(function() {
         return generateQrDataUrl(qrData).then(function(qrDataUrl) {
           return stampPages(outputPdf, [page], student, qrDataUrl, maxScore, pageNum, pageCount);
@@ -1096,8 +1096,8 @@
       try {
         new QRCode(container, {
           text:          String(text),
-          width:         128,
-          height:        128,
+          width:         512,
+          height:        512,
           correctLevel:  QRCode.CorrectLevel.M,
         });
         // qrcode.js creates a canvas inside the container
