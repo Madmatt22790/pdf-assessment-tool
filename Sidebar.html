@@ -693,31 +693,30 @@
                             if (!rawGroups[id]) rawGroups[id] = [];
                             rawGroups[id].push({ pdfPage: i, pageNum: pageNum });
 
-                            // Extract outcome payload from page 1 QR only
-                            if (pageNum === 1 && parts.length > 2) {
-                              var outcomes  = [];
-                              var sheetName = null;
+                            // Accumulate outcome payload from all pages.
+                            // OC: (sheet name) appears on page 1; O: entries spread across pages.
+                            // Backward-compatible: old PDFs with all outcomes on page 1 still work.
+                            if (parts.length > 2) {
                               for (var p = 2; p < parts.length; p++) {
                                 if (parts[p].indexOf('OC:') === 0) {
-                                  sheetName = parts[p].substring(3);
+                                  if (!outcomeMap[id]) outcomeMap[id] = { sheetName: null, outcomes: [] };
+                                  outcomeMap[id].sheetName = parts[p].substring(3);
                                 } else if (parts[p].indexOf('O:') === 0) {
                                   var oData  = parts[p].substring(2).split('~');
                                   if (oData.length >= 3) {
                                     var hasX   = oData.length >= 4;
                                     var rowNum = parseInt(oData[0], 10);
                                     var isRow  = !isNaN(rowNum) && rowNum >= 3;
-                                    outcomes.push({
-                                      row:   isRow ? rowNum  : null,
-                                      text:  isRow ? null    : oData[0],
-                                      yPct:  parseFloat(oData[1]),
-                                      xPct:  hasX ? parseFloat(oData[2]) : 0,
-                                      page:  parseInt(hasX ? oData[3] : oData[2], 10),
+                                    if (!outcomeMap[id]) outcomeMap[id] = { sheetName: null, outcomes: [] };
+                                    outcomeMap[id].outcomes.push({
+                                      row:  isRow ? rowNum : null,
+                                      text: isRow ? null   : oData[0],
+                                      yPct: parseFloat(oData[1]),
+                                      xPct: hasX ? parseFloat(oData[2]) : 0,
+                                      page: parseInt(hasX ? oData[3] : oData[2], 10),
                                     });
                                   }
                                 }
-                              }
-                              if (sheetName && outcomes.length) {
-                                outcomeMap[id] = { sheetName: sheetName, outcomes: outcomes };
                               }
                             }
                           } else {
@@ -730,7 +729,9 @@
                           unassignedPages.push(i);
                         }
                       } else {
-                        unassignedPages.push(i);
+                        // Only flag as unassigned if the page has visible content.
+                        // Blank filler pages (appended for double-sided printing) are silently skipped.
+                        if (!isPageBlank(imgData)) unassignedPages.push(i);
                       }
                       processPage(i + 1);
                     });
@@ -850,6 +851,20 @@
       '</div>' +
       '<div id="ustatus_' + pageNum + '" style="font-size:11px;margin-top:4px;"></div>';
     return row;
+  }
+
+  // Returns true if the rendered page has too few dark pixels to contain content.
+  // Samples every 8th pixel for speed. Threshold: <1% of sampled pixels below luma 180.
+  function isPageBlank(imgData) {
+    var data  = imgData.data;
+    var dark  = 0;
+    var total = 0;
+    for (var idx = 0; idx < data.length; idx += 32) { // step 8 pixels (32 bytes)
+      var avg = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+      if (avg < 180) dark++;
+      total++;
+    }
+    return dark / total < 0.01;
   }
 
   function renderPageThumbnail(pageNum, canvas) {
