@@ -147,6 +147,36 @@ function startAssessmentUpload(sourceFileId, fileName, fileSize) {
 }
 
 /**
+ * Stores an outcome config object in the hidden _OC sheet and returns the row number.
+ * The row number is embedded in the page-1 QR code so the splitter can look up the
+ * full config without encoding it inline (keeping QR codes small).
+ * config: { sheetName, outcomes: [{row, yPct, xPct, page}, ...] }
+ */
+function storeOutcomeConfig(config) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('_OC');
+  if (!sheet) {
+    sheet = ss.insertSheet('_OC');
+    sheet.hideSheet();
+  }
+  sheet.appendRow([JSON.stringify(config)]);
+  return sheet.getLastRow();
+}
+
+/**
+ * Retrieves a previously stored outcome config by row number.
+ * Returns { sheetName, outcomes: [{row, yPct, xPct, page}, ...] }
+ */
+function getOutcomeConfig(rowNum) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('_OC');
+  if (!sheet) throw new Error('_OC sheet not found — regenerate the assessment to rebuild it.');
+  var val = sheet.getRange(rowNum, 1).getValue();
+  if (!val) throw new Error('No outcome config at row ' + rowNum + ' in _OC sheet.');
+  return JSON.parse(val);
+}
+
+/**
  * Sends one chunk to an in-progress Drive resumable upload session.
  * Returns {done: false} while more chunks are needed, or
  * {done: true, url, fileName} when the upload is complete.
