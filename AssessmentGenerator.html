@@ -352,6 +352,7 @@
   var detectedOutcomes   = [];  // [{row, text, yPct, xPct, page}] matched outcomes ready for QR
   var pendingRawOutcomes = [];  // raw [{text, yPct, xPct, page}] from PDF scan, kept for re-matching
   var outcomesConfig     = null;
+  var outcomeSheetRow    = null; // row number in hidden _OC sheet for current generation
 
   window.addEventListener('load', function() {
     setTimeout(function() { loadSheetNames(0); }, 500);
@@ -799,8 +800,20 @@
             })
             .then(function(blankPdf) {
               setProgress(20, 'Generating assessments for ' + students.length + ' students...');
-              var maxScore = parseInt(document.getElementById('maxScore').value, 10);
+              var maxScore    = parseInt(document.getElementById('maxScore').value, 10);
               var maxScoreVal = isNaN(maxScore) ? null : maxScore;
+              if (outcomesConfig && detectedOutcomes.length > 0) {
+                return new Promise(function(resolve, reject) {
+                  google.script.run
+                    .withSuccessHandler(function(rowNum) {
+                      outcomeSheetRow = rowNum;
+                      resolve(buildCombinedPdf(blankPdf, maxScoreVal));
+                    })
+                    .withFailureHandler(function(e) { reject(new Error(e.message)); })
+                    .storeOutcomeConfig({ sheetName: outcomesConfig.sheetName, outcomes: detectedOutcomes });
+                });
+              }
+              outcomeSheetRow = null;
               return buildCombinedPdf(blankPdf, maxScoreVal);
             })
             .then(function(combinedBytes) {
@@ -903,21 +916,11 @@
   function stampPagesWithPerPageQR(outputPdf, pages, student, pageCount, maxScore) {
     var chain = Promise.resolve();
 
-    // Each page's QR carries only outcomes that appear on that page.
-    // OC: (sheet name) is on page 1 only. yPct/xPct rounded to 3dp to keep QR small.
-    // Format: studentId|pNofTotal[|OC:sheetName][|O:row~yPct~xPct~page|...]
+    // Page 1 carries just the hidden-sheet row key; other pages carry no outcome data.
+    // Format: studentId|pNofTotal[|OC:rowNum]
     pages.forEach(function(page, i) {
-      var pageNum = i + 1;
-      var pagePayload = '';
-      if (outcomesConfig && detectedOutcomes.length > 0) {
-        if (pageNum === 1) pagePayload = '|OC:' + outcomesConfig.sheetName;
-        detectedOutcomes.forEach(function(o) {
-          if (o.page === pageNum) {
-            pagePayload += '|O:' + o.row + '~' + parseFloat(o.yPct.toFixed(3)) +
-                           '~' + parseFloat(o.xPct.toFixed(3)) + '~' + o.page;
-          }
-        });
-      }
+      var pageNum    = i + 1;
+      var pagePayload = (pageNum === 1 && outcomeSheetRow) ? '|OC:' + outcomeSheetRow : '';
       var qrData = student.id + '|p' + pageNum + 'of' + pageCount + pagePayload;
       chain = chain.then(function() {
         return generateQrDataUrl(qrData).then(function(qrDataUrl) {
