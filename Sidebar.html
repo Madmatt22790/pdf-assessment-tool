@@ -462,6 +462,8 @@
   // Score entry — populated after split completes
   var splitStudentDocs      = [];  // [{name, id, pdfBytes}] kept for score cropping
   var outcomeMap            = {};  // studentId → {sheetName, outcomes:[{text,yPct,page}]}
+  var pendingOcLookups      = {};  // studentId → row number in hidden _OC sheet
+  var ocRowCache            = {};  // rowNum    → config — avoids duplicate server fetches
   var pendingOutcomeResults = [];  // saved so unmatched outcomes can be retried
 
   // ── Init ─────────────────────────────────────────────────────────────────
@@ -699,8 +701,16 @@
                             if (parts.length > 2) {
                               for (var p = 2; p < parts.length; p++) {
                                 if (parts[p].indexOf('OC:') === 0) {
-                                  if (!outcomeMap[id]) outcomeMap[id] = { sheetName: null, outcomes: [] };
-                                  outcomeMap[id].sheetName = parts[p].substring(3);
+                                  var ocVal    = parts[p].substring(3);
+                                  var ocRowNum = parseInt(ocVal, 10);
+                                  if (!isNaN(ocRowNum) && ocRowNum >= 1) {
+                                    // New format: row number in hidden _OC sheet
+                                    pendingOcLookups[id] = ocRowNum;
+                                  } else {
+                                    // Old format: sheet name encoded directly
+                                    if (!outcomeMap[id]) outcomeMap[id] = { sheetName: null, outcomes: [] };
+                                    outcomeMap[id].sheetName = ocVal;
+                                  }
                                 } else if (parts[p].indexOf('O:') === 0) {
                                   var oData  = parts[p].substring(2).split('~');
                                   if (oData.length >= 3) {
@@ -1452,6 +1462,29 @@
 
     var entry   = splitStudentDocs[index];
     var oData   = outcomeMap[entry.id];
+
+    // Lazy lookup: if the QR had a hidden-sheet row key, fetch the config now.
+    // ocRowCache avoids redundant server calls when all students share the same assessment.
+    if (!oData && pendingOcLookups[entry.id] != null) {
+      var rowNum = pendingOcLookups[entry.id];
+      if (ocRowCache[rowNum]) {
+        outcomeMap[entry.id] = ocRowCache[rowNum];
+        processNextOutcomeStudent(index, allResults);
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(function(config) {
+          ocRowCache[rowNum] = config;
+          outcomeMap[entry.id] = config;
+          processNextOutcomeStudent(index, allResults);
+        })
+        .withFailureHandler(function() {
+          processNextOutcomeStudent(index + 1, allResults);
+        })
+        .getOutcomeConfig(rowNum);
+      return;
+    }
+
     if (!oData) {
       // No outcome data for this student — skip
       processNextOutcomeStudent(index + 1, allResults);
