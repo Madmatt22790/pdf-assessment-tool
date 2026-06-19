@@ -1275,6 +1275,62 @@
     });
   }
 
+  // Builds a split PDF for the given 0-based page indices.
+  // Renders each page via pdf.js then re-embeds as JPEG, which is reliable for
+  // scanner-generated PDFs where pdf-lib's copyPages produces blank pages.
+  // Falls back to copyPages when masterPdfJs is unavailable (vector PDFs, etc.).
+  var SPLIT_RENDER_SCALE = 2.0;
+
+  function buildSplitPdf(indices) {
+    if (!masterPdfJs) {
+      return PDFLib.PDFDocument.create().then(function(doc) {
+        return doc.copyPages(masterPdf, indices).then(function(copied) {
+          copied.forEach(function(p) { doc.addPage(p); });
+          return doc.save();
+        });
+      });
+    }
+
+    function renderPage(idx) {
+      return masterPdfJs.getPage(idx + 1).then(function(page) {
+        var vp = page.getViewport({ scale: SPLIT_RENDER_SCALE });
+        var canvas = document.createElement('canvas');
+        canvas.width  = vp.width;
+        canvas.height = vp.height;
+        return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
+          .then(function() {
+            return new Promise(function(resolve) {
+              canvas.toBlob(function(blob) {
+                var reader = new FileReader();
+                reader.onload = function() {
+                  resolve({ bytes: new Uint8Array(reader.result), w: vp.width, h: vp.height });
+                };
+                reader.readAsArrayBuffer(blob);
+              }, 'image/jpeg', 0.92);
+            });
+          });
+      });
+    }
+
+    return indices.reduce(function(chain, idx) {
+      return chain.then(function(acc) {
+        return renderPage(idx).then(function(r) { acc.push(r); return acc; });
+      });
+    }, Promise.resolve([])).then(function(rendered) {
+      return PDFLib.PDFDocument.create().then(function(doc) {
+        return rendered.reduce(function(chain, rp) {
+          return chain.then(function() {
+            return doc.embedJpg(rp.bytes).then(function(img) {
+              var pageW = rp.w / SPLIT_RENDER_SCALE;
+              var pageH = rp.h / SPLIT_RENDER_SCALE;
+              doc.addPage([pageW, pageH]).drawImage(img, { x: 0, y: 0, width: pageW, height: pageH });
+            });
+          });
+        }, Promise.resolve()).then(function() { return doc.save(); });
+      });
+    });
+  }
+
   function processNextStudent(students, index, failedUploads) {
     if (index >= students.length) return Promise.resolve();
 
@@ -1285,14 +1341,7 @@
     var indices = student.pages.map(function(p) { return p - 1; });
     var savedBytes = null;
 
-    return PDFLib.PDFDocument.create()
-      .then(function(studentDoc) {
-        return studentDoc.copyPages(masterPdf, indices)
-          .then(function(copiedPages) {
-            copiedPages.forEach(function(p) { studentDoc.addPage(p); });
-            return studentDoc.save();
-          });
-      })
+    return buildSplitPdf(indices)
       .then(function(pdfBytes) {
         savedBytes = pdfBytes;
         return new Promise(function(resolve, reject) {
