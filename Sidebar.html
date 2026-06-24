@@ -651,11 +651,37 @@
           })
           .then(function(bytes) {
 
+              // Some scanners set the FDICT bit in zlib stream headers without actually
+              // using a preset dictionary (scanner firmware bug). pdf.js refuses to decode
+              // these streams, rendering every page as blank white. Fix: clear the FDICT bit
+              // and recalculate the zlib header checksum byte before handing to pdf.js.
+              function patchFdictStreams(src) {
+                var out = src.slice();
+                // "stream" in ASCII: 73 74 72 65 61 6D
+                for (var i = 0; i < out.length - 9; i++) {
+                  if (out[i]   !== 0x73 || out[i+1] !== 0x74 || out[i+2] !== 0x72 ||
+                      out[i+3] !== 0x65 || out[i+4] !== 0x61 || out[i+5] !== 0x6D) continue;
+                  var p = i + 6;
+                  if (out[p] === 0x0D) p++;  // CR
+                  if (out[p] !== 0x0A) continue;  // must be LF
+                  p++;
+                  if (p + 1 >= out.length) continue;
+                  var cmf = out[p], flg = out[p + 1];
+                  if ((cmf & 0x0F) === 8 && (flg & 0x20)) {  // deflate + FDICT set
+                    var flevel = flg & 0xC0;
+                    var fcheck = (31 - ((cmf * 256 + flevel) % 31)) % 31;
+                    out[p + 1] = flevel | fcheck;
+                    console.log('[patch] FDICT cleared at byte', p, '— FLG', flg, '->', out[p + 1]);
+                  }
+                }
+                return out;
+              }
+
               // Give pdf-lib and pdf.js SEPARATE copies of the bytes.
               // pdf.js transfers the buffer as a Transferable (zeroing the original),
               // which would corrupt masterPdf if both shared the same Uint8Array.
-              var bytesForPdfLib  = bytes.slice();   // independent copy for pdf-lib
-              var bytesForPdfJs   = bytes;            // pdf.js can have the original
+              var bytesForPdfLib  = bytes.slice();           // independent copy for pdf-lib
+              var bytesForPdfJs   = patchFdictStreams(bytes); // fix FDICT before pdf.js sees it
 
               // Pre-load into pdf-lib so split step doesn't need to re-fetch
               PDFLib.PDFDocument.load(bytesForPdfLib, { ignoreEncryption: true })
