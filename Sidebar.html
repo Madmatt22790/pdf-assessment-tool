@@ -676,7 +676,7 @@
                   document.getElementById('scanBar').style.width = Math.round((i / n) * 100) + '%';
                   document.getElementById('scanLabel').textContent = 'Scanning page ' + i + ' of ' + n + '…';
                   pdf.getPage(i).then(function(pg) {
-                    var vp = pg.getViewport({ scale: 2.0 });
+                    var vp = pg.getViewport({ scale: 3.5 });
                     var cv = document.createElement('canvas');
                     cv.width = vp.width; cv.height = vp.height;
                     pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise.then(function() {
