@@ -673,15 +673,22 @@
                     finishScan(n);
                     return;
                   }
+                  console.log('[QR] page', i, 'of', n);
                   document.getElementById('scanBar').style.width = Math.round((i / n) * 100) + '%';
                   document.getElementById('scanLabel').textContent = 'Scanning page ' + i + ' of ' + n + '…';
                   pdf.getPage(i).then(function(pg) {
                     var vp = pg.getViewport({ scale: 3.5 });
                     var cv = document.createElement('canvas');
                     cv.width = vp.width; cv.height = vp.height;
+                    console.log('[QR] page', i, 'canvas', cv.width, 'x', cv.height);
                     pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise.then(function() {
                       var imgData = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
+                      // Sample first pixel to check rendering produced output
+                      var d = imgData.data;
+                      console.log('[QR] page', i, 'rendered. px[0] RGBA:', d[0], d[1], d[2], d[3],
+                                  '| px[4] RGBA:', d[4], d[5], d[6], d[7]);
                       var qr = jsQR(imgData.data, imgData.width, imgData.height);
+                      console.log('[QR] page', i, 'jsQR:', qr ? qr.data : 'null');
                       if (qr) {
                         // Parse QR — format: studentId|pNofTotal[|OC:sheet|O:text~yPct~page|O:...]
                         // Split on | but protect outcome text which may have been sanitised
@@ -741,10 +748,18 @@
                       } else {
                         // Only flag as unassigned if the page has visible content.
                         // Blank filler pages (appended for double-sided printing) are silently skipped.
-                        if (!isPageBlank(imgData)) unassignedPages.push(i);
+                        var blank = isPageBlank(imgData);
+                        console.log('[QR] page', i, 'isPageBlank:', blank);
+                        if (!blank) unassignedPages.push(i);
                       }
                       processPage(i + 1);
+                    }).catch(function(err) {
+                      console.error('[QR] page', i, 'render error:', err);
+                      processPage(i + 1); // skip and continue
                     });
+                  }).catch(function(err) {
+                    console.error('[QR] page', i, 'getPage error:', err);
+                    processPage(i + 1); // skip and continue
                   });
                 }
                 processPage(1);
@@ -874,7 +889,9 @@
       if (avg < 180) dark++;
       total++;
     }
-    return dark / total < 0.01;
+    var ratio = dark / total;
+    console.log('[blank] dark', dark, '/ total', total, '= ratio', ratio.toFixed(4));
+    return ratio < 0.01;
   }
 
   function renderPageThumbnail(pageNum, canvas) {
