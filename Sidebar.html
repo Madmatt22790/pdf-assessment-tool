@@ -651,28 +651,56 @@
           })
           .then(function(bytes) {
 
-              // Some scanners set the FDICT bit in zlib stream headers without actually
-              // using a preset dictionary (scanner firmware bug). pdf.js refuses to decode
-              // these streams, rendering every page as blank white. Fix: clear the FDICT bit
-              // and recalculate the zlib header checksum byte before handing to pdf.js.
-              function patchFdictStreams(src) {
-                var out = src.slice();
-                var count = 0;
-                for (var i = 0; i < out.length - 1; i++) {
-                  if (out[i] === 0x78 && out[i + 1] === 0x3F) {
-                    out[i + 1] = 0x01;
-                    count++;
-                  }
+              // Fix scanner PDFs with FDICT bit set in zlib stream headers.
+              // pdf.js refuses to decode FDICT streams (FormatError), rendering every
+              // page blank white. Use pdf-lib's object model to find the actual stream
+              // objects, then decompress each FDICT stream with pako and store the raw
+              // bytes with the FlateDecode filter removed. pdf.js then renders normally.
+              function decompressFdictStreams(pdfBytes) {
+                function doPatch() {
+                  return PDFLib.PDFDocument.load(pdfBytes, { ignoreEncryption: true, updateMetadata: false })
+                    .then(function(pdfDoc) {
+                      var context = pdfDoc.context;
+                      var patchedCount = 0;
+                      context.enumerateIndirectObjects().forEach(function(pair) {
+                        var obj = pair[1];
+                        if (!obj || !obj.dict || !obj.contents) return;
+                        var raw = obj.contents;
+                        // CMF=0x78 (deflate) + FLG with FDICT bit (0x20) set
+                        if (raw.length < 8 || raw[0] !== 0x78 || !(raw[1] & 0x20)) return;
+                        var dec = null;
+                        // Try offset 6: CMF+FLG+4-byte dict-ID then raw deflate
+                        try { dec = pako.inflateRaw(raw.slice(6)); } catch(e) {}
+                        // Try offset 2: FDICT flag set but no real dict-ID (firmware bug)
+                        if (!dec || !dec.length) { try { dec = pako.inflateRaw(raw.slice(2)); } catch(e) {} }
+                        if (!dec || !dec.length) return;
+                        obj.contents = dec;
+                        obj.dict.set(PDFLib.PDFName.of('Length'), PDFLib.PDFNumber.of(dec.length));
+                        var fk = PDFLib.PDFName.of('Filter');
+                        var dk = PDFLib.PDFName.of('DecodeParms');
+                        var fv = obj.dict.get(fk);
+                        if (fv && fv.array && fv.array.length > 1) {
+                          fv.array.shift(); // remove leading FlateDecode, keep rest
+                          var dp = obj.dict.get(dk); if (dp && dp.array) dp.array.shift();
+                        } else { obj.dict.delete(fk); obj.dict.delete(dk); }
+                        patchedCount++;
+                      });
+                      console.log('[fdict] Decompressed', patchedCount, 'FDICT streams via pako+pdf-lib');
+                      return patchedCount === 0 ? pdfBytes : pdfDoc.save();
+                    });
                 }
-                console.log('[patch] Scanned', out.length, 'bytes, patched', count, 'FDICT headers (0x78 0x3F -> 0x78 0x01)');
-                return out;
+                if (window.pako) return doPatch();
+                return new Promise(function(resolve) {
+                  loadScript('https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js',
+                    function() { doPatch().then(resolve).catch(function() { resolve(pdfBytes); }); },
+                    function() { resolve(pdfBytes); });
+                });
               }
 
-              // Give pdf-lib and pdf.js SEPARATE copies of the bytes.
-              // pdf.js transfers the buffer as a Transferable (zeroing the original),
-              // which would corrupt masterPdf if both shared the same Uint8Array.
-              var bytesForPdfLib  = bytes.slice();           // independent copy for pdf-lib
-              var bytesForPdfJs   = patchFdictStreams(bytes); // fix FDICT before pdf.js sees it
+              var bytesForPdfLib = bytes.slice();
+
+              showStatus('s2status', 'info', 'Preparing PDF…');
+              decompressFdictStreams(bytes.slice()).then(function(bytesForPdfJs) {
 
               // Pre-load into pdf-lib so split step doesn't need to re-fetch
               PDFLib.PDFDocument.load(bytesForPdfLib, { ignoreEncryption: true })
@@ -786,6 +814,7 @@
                 document.getElementById('scanBtn').disabled = false;
                 document.getElementById('scanProgress').style.display = 'none';
               });
+              }); // close decompressFdictStreams
           })
           .catch(function(err) {
             showStatus('s2status', 'error', 'Could not fetch PDF: ' + err.message);
